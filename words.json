@@ -1,0 +1,6 @@
+[
+  { "word": "apple", "meaning": "苹果", "category": "Food", "difficulty": "easy" },
+  { "word": "teacher", "meaning": "老师", "category": "School", "difficulty": "easy" },
+  { "word": "library", "meaning": "图书馆", "category": "School", "difficulty": "medium" },
+  { "word": "adventure", "meaning": "冒险", "category": "General", "difficulty": "hard" }
+]

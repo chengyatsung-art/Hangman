@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>课堂 Hangman</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-shape bg-shape-a"></div>
+  <div class="bg-shape bg-shape-b"></div>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>课堂 Hangman</h1>
+        <p class="sub">导入只是本地草稿，发布后才会同步公共词库</p>
+      </div>
+      <div class="status-wrap">
+        <span id="networkBadge" class="badge">网络检测中...</span>
+        <span id="wordBankBadge" class="badge">词库状态检测中...</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="studentTab">学生游戏</button>
+      <button class="tab-btn" data-tab="teacherTab">老师模式</button>
+      <button class="tab-btn" data-tab="rankTab">排行榜</button>
+    </nav>
+
+    <section id="studentTab" class="tab-panel active">
+      <div id="startCard" class="card">
+        <h2>开始前请填写信息</h2>
+        <form id="studentForm" novalidate>
+          <label>
+            姓名
+            <input id="studentName" type="text" placeholder="请输入姓名" required />
+          </label>
+          <label>
+            学号
+            <input id="studentId" type="text" placeholder="只允许字母、数字、_、-" required />
+          </label>
+          <label>
+            模式
+            <select id="gameMode">
+              <option value="practice">练习模式</option>
+              <option value="formal">正式模式</option>
+            </select>
+          </label>
+          <button type="submit" class="primary">进入游戏</button>
+        </form>
+        <p id="studentFormMsg" class="msg"></p>
+      </div>
+
+      <div id="gameCard" class="card hidden">
+        <div class="game-head">
+          <div>
+            <p id="studentInfoText"></p>
+            <p id="wordMetaText"></p>
+          </div>
+          <button id="toggleMeaningBtn" class="ghost">释义：开</button>
+        </div>
+
+        <div class="hangman-area">
+          <svg id="hangmanSvg" viewBox="0 0 160 180" aria-label="hangman">
+            <line x1="10" y1="170" x2="100" y2="170"></line>
+            <line x1="40" y1="170" x2="40" y2="20"></line>
+            <line x1="40" y1="20" x2="110" y2="20"></line>
+            <line x1="110" y1="20" x2="110" y2="40"></line>
+            <circle class="part" data-step="1" cx="110" cy="55" r="15"></circle>
+            <line class="part" data-step="2" x1="110" y1="70" x2="110" y2="110"></line>
+            <line class="part" data-step="3" x1="110" y1="80" x2="88" y2="98"></line>
+            <line class="part" data-step="4" x1="110" y1="80" x2="132" y2="98"></line>
+            <line class="part" data-step="5" x1="110" y1="110" x2="92" y2="138"></line>
+            <line class="part" data-step="6" x1="110" y1="110" x2="128" y2="138"></line>
+          </svg>
+          <div class="word-box">
+            <p id="wordSlots" class="slots"></p>
+            <p id="meaningText" class="meaning"></p>
+          </div>
+        </div>
+
+        <div id="keyboard" class="keyboard"></div>
+
+        <div class="actions">
+          <button id="hintBtn">提示（扣分）</button>
+          <button id="nextBtn" class="primary">下一题</button>
+          <button id="resetBtn">重置本局</button>
+          <button id="finishBtn" class="danger">提交成绩并结束</button>
+        </div>
+
+        <div class="stats">
+          <p id="scoreText"></p>
+          <p id="questionResultText"></p>
+          <p id="uploadStatusText"></p>
+        </div>
+      </div>
+
+      <div id="resultCard" class="card hidden">
+        <h2>本次结果</h2>
+        <p id="summaryText"></p>
+        <p id="summaryUploadText"></p>
+        <div class="actions">
+          <button id="restartBtn" class="primary">重新开始</button>
+          <button id="retryPendingBtn">补传未上传成绩</button>
+          <button id="exportCsvBtn">导出本地成绩 CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="teacherTab" class="tab-panel">
+      <div class="card">
+        <h2>老师模式</h2>
+        <p class="tip">导入词库后默认仅保存本地草稿，不会自动全网同步。</p>
+        <div class="teacher-grid">
+          <label>
+            老师姓名
+            <input id="teacherName" type="text" placeholder="例如：张老师" />
+          </label>
+          <label>
+            词库名称
+            <input id="wordListName" type="text" placeholder="例如：Unit 3" />
+          </label>
+          <label>
+            分类
+            <input id="categoryInput" type="text" placeholder="例如：Animals" />
+          </label>
+          <label>
+            难度
+            <select id="difficultyInput">
+              <option value="easy">简单</option>
+              <option value="medium">中等</option>
+              <option value="hard">困难</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions">
+          <input id="importFileInput" type="file" accept=".txt,.csv,.json" />
+          <button id="importBtn" class="primary">导入词库到本地草稿</button>
+          <button id="dedupeBtn">去重与清洗</button>
+          <button id="clearDraftBtn" class="danger">清空本地草稿</button>
+          <button id="useDraftBtn">学生端使用本地草稿测试</button>
+          <button id="publishBtn" class="primary">发布到公共词库</button>
+          <button id="loadSharedBtn">读取公共词库预览</button>
+        </div>
+
+        <p id="teacherStatusText" class="msg"></p>
+        <p id="teacherPublishText" class="msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>本地草稿词库</h3>
+        <p id="draftCountText"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>单词</th>
+                <th>释义</th>
+                <th>分类</th>
+                <th>难度</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="draftTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>公共词库预览</h3>
+        <p id="sharedCountText"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>单词</th>
+                <th>释义</th>
+                <th>分类</th>
+                <th>难度</th>
+                <th>版本</th>
+              </tr>
+            </thead>
+            <tbody id="sharedTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="rankTab" class="tab-panel">
+      <div class="card">
+        <h2>本地排行榜</h2>
+        <p class="tip">排行榜来自本地已保存成绩（含已上传/待上传）。</p>
+        <div class="actions">
+          <button id="refreshRankBtn">刷新排行榜</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>学号</th>
+                <th>总分</th>
+                <th>正确</th>
+                <th>失败</th>
+                <th>时间</th>
+              </tr>
+            </thead>
+            <tbody id="rankTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
