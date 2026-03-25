@@ -83,7 +83,7 @@
     refreshLeaderboard();
     bootstrapWords();
     refreshTeacherLockState();
-    if (isTeacherUnlocked()) loadWordListsForTeacher();
+    loadWordListsForTeacher();
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", refreshNetworkBadge);
   }
