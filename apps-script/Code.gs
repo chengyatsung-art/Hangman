@@ -31,7 +31,9 @@ function doPost(e) {
     if (action === "listWordLists") {
       var wordLists = listWordLists_();
       var active = getActiveWordList_();
-      return json_({ ok: true, data: { wordLists: wordLists, active: active } });
+      var activeGameMode = getActiveGameMode_();
+      var maxWrongGuesses = getMaxWrongGuesses_();
+      return json_({ ok: true, data: { wordLists: wordLists, active: active, activeGameMode: activeGameMode, maxWrongGuesses: maxWrongGuesses } });
     }
 
     if (action === "setActiveWordList") {
@@ -43,6 +45,29 @@ function doPost(e) {
     if (action === "loadActiveWordList") {
       var activeWords = loadActiveWordList_();
       return json_({ ok: true, data: activeWords });
+    }
+
+    if (action === "loadWordListBySelection") {
+      var selectedWords = loadWordListBySelection_(payload);
+      return json_({ ok: true, data: selectedWords });
+    }
+
+    if (action === "getActiveGameMode") {
+      return json_({ ok: true, data: { activeGameMode: getActiveGameMode_() } });
+    }
+
+    if (action === "setActiveGameMode") {
+      setActiveGameMode_(payload);
+      return json_({ ok: true, data: { activeGameMode: getActiveGameMode_() }, message: "active game mode updated" });
+    }
+
+    if (action === "getMaxWrongGuesses") {
+      return json_({ ok: true, data: { maxWrongGuesses: getMaxWrongGuesses_() } });
+    }
+
+    if (action === "setMaxWrongGuesses") {
+      setMaxWrongGuesses_(payload);
+      return json_({ ok: true, data: { maxWrongGuesses: getMaxWrongGuesses_() }, message: "max wrong guesses updated" });
     }
 
     if (action === "loadLeaderboard") {
@@ -203,17 +228,33 @@ function loadActiveWordList_() {
     setActiveWordList_(active);
   }
 
+  return { words: loadWordsByList_(active.wordListName, active.version), active: active };
+}
+
+function loadWordListBySelection_(payload) {
+  var wordListName = String(payload && payload.wordListName || "").trim();
+  var version = String(payload && payload.version || "").trim();
+  if (!wordListName || !version) {
+    throw new Error("wordListName and version are required");
+  }
+  return {
+    words: loadWordsByList_(wordListName, version),
+    active: { wordListName: wordListName, version: version }
+  };
+}
+
+function loadWordsByList_(wordListName, version) {
   var sheet = getSheet_("SharedWordBank");
   ensureWordHeader_(sheet);
   var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { words: [], active: active };
+  if (lastRow <= 1) return [];
   var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
   var result = [];
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     if (String(row[7]) !== "active") continue;
-    if (String(row[2] || "").trim() !== active.wordListName) continue;
-    if (String(row[8] || "").trim() !== active.version) continue;
+    if (String(row[2] || "").trim() !== wordListName) continue;
+    if (String(row[8] || "").trim() !== version) continue;
     result.push({
       publishTime: row[0],
       teacherName: row[1],
@@ -227,7 +268,39 @@ function loadActiveWordList_() {
       source: row[9]
     });
   }
-  return { words: result, active: active };
+  return result;
+}
+
+function getActiveGameMode_() {
+  var mode = String(getSetting_("activeGameMode") || "").trim().toLowerCase();
+  if (mode !== "formal" && mode !== "practice") mode = "practice";
+  return mode;
+}
+
+function setActiveGameMode_(payload) {
+  var mode = String(payload && payload.mode || "").trim().toLowerCase();
+  if (mode !== "formal" && mode !== "practice") {
+    throw new Error("mode must be practice or formal");
+  }
+  setSetting_("activeGameMode", mode);
+  setSetting_("activeModeUpdatedAt", new Date().toISOString());
+}
+
+function getMaxWrongGuesses_() {
+  var raw = Number(getSetting_("maxWrongGuesses"));
+  if (isNaN(raw)) raw = 10;
+  if (raw < 1) raw = 1;
+  if (raw > 20) raw = 20;
+  return Math.round(raw);
+}
+
+function setMaxWrongGuesses_(payload) {
+  var raw = Number(payload && payload.maxWrongGuesses);
+  if (isNaN(raw)) throw new Error("maxWrongGuesses must be a number");
+  raw = Math.round(raw);
+  if (raw < 1 || raw > 20) throw new Error("maxWrongGuesses must be between 1 and 20");
+  setSetting_("maxWrongGuesses", raw);
+  setSetting_("maxWrongGuessesUpdatedAt", new Date().toISOString());
 }
 
 function loadLeaderboard_(payload) {

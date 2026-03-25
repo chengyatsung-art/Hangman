@@ -138,6 +138,10 @@ form, .teacher-grid {
   margin-top: 12px;
 }
 
+#studentForm {
+  column-gap: 24px;
+}
+
 label {
   display: grid;
   gap: 6px;

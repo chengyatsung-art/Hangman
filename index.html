@@ -41,9 +41,13 @@
           </label>
           <label>
             模式
-            <select id="gameMode">
-              <option value="practice">练习模式</option>
-              <option value="formal">正式模式</option>
+            <span class="tip">模式由老师统一设置</span>
+          </label>
+          <p id="studentModeHint" class="msg"></p>
+          <label id="studentWordListWrap" class="hidden">
+            练习词库
+            <select id="studentWordListSelect">
+              <option value="">请选择词库</option>
             </select>
           </label>
           <button type="submit" class="primary">进入游戏</button>
@@ -108,6 +112,16 @@
     </section>
 
     <section id="teacherTab" class="tab-panel">
+      <div id="teacherUnlockCard" class="card">
+        <h2>老师模式解锁</h2>
+        <div class="actions">
+          <input id="teacherPasswordInput" type="password" placeholder="请输入老师密码" />
+          <button id="teacherUnlockBtn" class="primary">解锁老师模式</button>
+        </div>
+        <p id="teacherUnlockMsg" class="msg"></p>
+      </div>
+
+      <div id="teacherContentWrap" class="hidden">
       <div class="card">
         <h2>老师模式</h2>
         <p class="tip">导入词库后默认仅保存本地草稿，不会自动全网同步。</p>
@@ -152,6 +166,19 @@
           <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
         </div>
         <p id="activeWordListText" class="msg"></p>
+        <div class="actions">
+          <select id="teacherGameMode">
+            <option value="practice">练习模式</option>
+            <option value="formal">正式模式</option>
+          </select>
+          <button id="setGameModeBtn" class="primary">设置学生模式</button>
+        </div>
+        <p id="activeGameModeText" class="msg"></p>
+        <div class="actions">
+          <input id="teacherMaxWrongGuesses" type="number" min="1" max="20" step="1" value="10" />
+          <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
+        </div>
+        <p id="activeMaxWrongGuessesText" class="msg"></p>
         <p id="teacherStatusText" class="msg"></p>
         <p id="teacherPublishText" class="msg"></p>
       </div>
@@ -163,6 +190,7 @@
           <table>
             <thead>
               <tr>
+                <th>词库名</th>
                 <th>单词</th>
                 <th>释义</th>
                 <th>分类</th>
@@ -182,6 +210,7 @@
           <table>
             <thead>
               <tr>
+                <th>词库名</th>
                 <th>单词</th>
                 <th>释义</th>
                 <th>分类</th>
@@ -192,6 +221,7 @@
             <tbody id="sharedTableBody"></tbody>
           </table>
         </div>
+      </div>
       </div>
     </section>
 

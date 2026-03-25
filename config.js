@@ -4,5 +4,6 @@ window.HANGMAN_CONFIG = {
   apiMode: "proxy",
   gasWebAppUrl: "https://script.google.com/macros/s/AKfycby3bcrdSKBIlBnDsm6FZLaGhX791pNdAHyv84DDOvWQoEDJAR6_rZ9sCA4zGBQjeJTR/exec",
   proxyEndpoint: "/.netlify/functions/sheet-proxy",
-  maxWrongGuesses: 6
+  maxWrongGuesses: 10,
+  teacherPassword: "cys88888888"
 };
