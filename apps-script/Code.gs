@@ -28,6 +28,28 @@ function doPost(e) {
       return json_({ ok: true, data: { words: words } });
     }
 
+    if (action === "listWordLists") {
+      var wordLists = listWordLists_();
+      var active = getActiveWordList_();
+      return json_({ ok: true, data: { wordLists: wordLists, active: active } });
+    }
+
+    if (action === "setActiveWordList") {
+      setActiveWordList_(payload);
+      var current = getActiveWordList_();
+      return json_({ ok: true, data: { active: current }, message: "active word list updated" });
+    }
+
+    if (action === "loadActiveWordList") {
+      var activeWords = loadActiveWordList_();
+      return json_({ ok: true, data: activeWords });
+    }
+
+    if (action === "loadLeaderboard") {
+      var rankings = loadLeaderboard_(payload);
+      return json_({ ok: true, data: { rankings: rankings } });
+    }
+
     return json_({ ok: false, message: "unknown action: " + action });
   } catch (err) {
     return json_({ ok: false, message: err.message });
@@ -102,6 +124,173 @@ function loadSharedWordList_() {
   return result;
 }
 
+function listWordLists_() {
+  var sheet = getSheet_("SharedWordBank");
+  ensureWordHeader_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+
+  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var map = {};
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    if (String(row[7]) !== "active") continue;
+    var wordListName = String(row[2] || "").trim();
+    var version = String(row[8] || "").trim();
+    if (!wordListName || !version) continue;
+    var key = wordListName + "|" + version;
+    if (!map[key]) {
+      map[key] = {
+        wordListName: wordListName,
+        version: version,
+        publishTime: String(row[0] || ""),
+        category: String(row[3] || ""),
+        difficulty: String(row[4] || ""),
+        count: 0
+      };
+    }
+    map[key].count += 1;
+  }
+
+  var list = [];
+  for (var k in map) {
+    if (map.hasOwnProperty(k)) list.push(map[k]);
+  }
+  list.sort(function (a, b) {
+    return String(b.publishTime).localeCompare(String(a.publishTime));
+  });
+  return list;
+}
+
+function setActiveWordList_(payload) {
+  var wordListName = String(payload && payload.wordListName || "").trim();
+  var version = String(payload && payload.version || "").trim();
+  if (!wordListName || !version) {
+    throw new Error("wordListName and version are required");
+  }
+
+  var list = listWordLists_();
+  var exists = false;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].wordListName === wordListName && list[i].version === version) {
+      exists = true;
+      break;
+    }
+  }
+  if (!exists) throw new Error("target word list not found");
+
+  setSetting_("activeWordListName", wordListName);
+  setSetting_("activeVersion", version);
+  setSetting_("activeUpdatedAt", new Date().toISOString());
+}
+
+function getActiveWordList_() {
+  var name = getSetting_("activeWordListName");
+  var version = getSetting_("activeVersion");
+  if (!name || !version) return null;
+  return { wordListName: name, version: version };
+}
+
+function loadActiveWordList_() {
+  var active = getActiveWordList_();
+  if (!active) {
+    var candidates = listWordLists_();
+    if (!candidates.length) return { words: [], active: null };
+    active = {
+      wordListName: candidates[0].wordListName,
+      version: candidates[0].version
+    };
+    setActiveWordList_(active);
+  }
+
+  var sheet = getSheet_("SharedWordBank");
+  ensureWordHeader_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { words: [], active: active };
+  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var result = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    if (String(row[7]) !== "active") continue;
+    if (String(row[2] || "").trim() !== active.wordListName) continue;
+    if (String(row[8] || "").trim() !== active.version) continue;
+    result.push({
+      publishTime: row[0],
+      teacherName: row[1],
+      wordListName: row[2],
+      category: row[3],
+      difficulty: row[4],
+      word: row[5],
+      meaning: row[6],
+      status: row[7],
+      version: row[8],
+      source: row[9]
+    });
+  }
+  return { words: result, active: active };
+}
+
+function loadLeaderboard_(payload) {
+  var sheet = getSheet_("Scores");
+  ensureScoreHeader_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+
+  var values = sheet.getRange(2, 1, lastRow - 1, 14).getValues();
+  var rankMap = {};
+  var i;
+  for (i = 0; i < values.length; i++) {
+    var row = values[i];
+    var studentName = String(row[1] || "").trim();
+    var studentId = String(row[2] || "").trim();
+    if (!studentId) continue;
+
+    var score = Number(row[10]);
+    if (isNaN(score)) score = 0;
+
+    var result = String(row[6] || "").toLowerCase();
+    var key = studentId + "|" + studentName;
+    if (!rankMap[key]) {
+      rankMap[key] = {
+        studentName: studentName,
+        studentId: studentId,
+        totalScore: 0,
+        correct: 0,
+        failed: 0,
+        games: 0,
+        lastPlayTime: ""
+      };
+    }
+
+    var item = rankMap[key];
+    item.totalScore += score;
+    if (result === "correct") item.correct += 1;
+    if (result === "wrong") item.failed += 1;
+    item.games += 1;
+
+    var ts = String(row[0] || "");
+    if (ts && (!item.lastPlayTime || ts > item.lastPlayTime)) {
+      item.lastPlayTime = ts;
+    }
+  }
+
+  var list = [];
+  for (var k in rankMap) {
+    if (rankMap.hasOwnProperty(k)) list.push(rankMap[k]);
+  }
+
+  list.sort(function (a, b) {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    if (b.correct !== a.correct) return b.correct - a.correct;
+    return String(a.lastPlayTime).localeCompare(String(b.lastPlayTime));
+  });
+
+  var limit = Number(payload && payload.limit ? payload.limit : 100);
+  if (isNaN(limit) || limit <= 0) limit = 100;
+  if (limit > 500) limit = 500;
+  return list.slice(0, limit);
+}
+
 function getSheet_(name) {
   var spreadsheetId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
   if (!spreadsheetId) {
@@ -130,6 +319,30 @@ function ensureWordHeader_(sheet) {
     "publishTime", "teacherName", "wordListName", "category", "difficulty",
     "word", "meaning", "status", "version", "source"
   ]);
+}
+
+function getSettingsSheet_() {
+  var sheet = getSheet_("Settings");
+  if (sheet.getLastRow() <= 0) {
+    sheet.appendRow(["key", "value", "updatedAt"]);
+  }
+  return sheet;
+}
+
+function getSetting_(key) {
+  var sheet = getSettingsSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return "";
+  var values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0]) === key) return String(values[i][1] || "");
+  }
+  return "";
+}
+
+function setSetting_(key, value) {
+  var sheet = getSettingsSheet_();
+  sheet.appendRow([key, String(value || ""), new Date().toISOString()]);
 }
 
 function json_(obj) {

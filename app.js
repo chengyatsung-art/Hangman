@@ -54,7 +54,9 @@
     },
     teacher: {
       draftWords: [],
-      sharedWords: []
+      sharedWords: [],
+      wordLists: [],
+      activeWordList: null
     }
   };
 
@@ -76,6 +78,7 @@
     updateWordBankBadge();
     refreshLeaderboard();
     bootstrapWords();
+    loadWordListsForTeacher();
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", refreshNetworkBadge);
   }
@@ -117,6 +120,10 @@
       useDraftBtn: document.getElementById("useDraftBtn"),
       publishBtn: document.getElementById("publishBtn"),
       loadSharedBtn: document.getElementById("loadSharedBtn"),
+      wordListSelect: document.getElementById("wordListSelect"),
+      refreshWordListsBtn: document.getElementById("refreshWordListsBtn"),
+      setActiveWordListBtn: document.getElementById("setActiveWordListBtn"),
+      activeWordListText: document.getElementById("activeWordListText"),
       teacherName: document.getElementById("teacherName"),
       wordListName: document.getElementById("wordListName"),
       categoryInput: document.getElementById("categoryInput"),
@@ -217,6 +224,8 @@
     });
     els.publishBtn.addEventListener("click", publishDraftWords);
     els.loadSharedBtn.addEventListener("click", loadSharedWordsForTeacher);
+    els.refreshWordListsBtn.addEventListener("click", loadWordListsForTeacher);
+    els.setActiveWordListBtn.addEventListener("click", setActiveWordListForTeacher);
   }
 
   function bindRankEvents() {
@@ -240,11 +249,13 @@
     }
 
     if (location.protocol !== "file:") {
-      const shared = await wordBankService.loadSharedWordList();
-      if (shared.length) {
-        state.words = shared;
+      const active = await wordBankService.loadActiveWordList();
+      if (active.words.length) {
+        state.words = active.words;
         state.wordSource = "shared";
         localStorage.setItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE, "shared");
+        state.teacher.activeWordList = active.active || null;
+        renderActiveWordListText();
         updateWordBankBadge();
         return;
       }
@@ -541,6 +552,7 @@
       updateWordBankBadge();
       setText(els.teacherPublishText, "发布成功。学生端可读取公共词库。", "var(--ok)");
       await loadSharedWordsForTeacher();
+      await loadWordListsForTeacher();
       return;
     }
 
@@ -555,6 +567,70 @@
     state.teacher.sharedWords = words;
     renderSharedTable();
     setText(els.teacherStatusText, words.length ? ("公共词库已读取，共 " + words.length + " 条。") : "未读取到远程词库，已回退本地缓存。", words.length ? "var(--ok)" : "var(--warn)");
+  }
+
+  async function loadWordListsForTeacher() {
+    const result = await wordBankService.listWordLists();
+    state.teacher.wordLists = result.wordLists || [];
+    state.teacher.activeWordList = result.active || null;
+
+    if (!els.wordListSelect) return;
+    els.wordListSelect.innerHTML = '<option value="">Select shared word list...</option>';
+    state.teacher.wordLists.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.wordListName + "|" + item.version;
+      option.textContent = item.wordListName + " (" + item.version + ", " + item.count + ")";
+      if (state.teacher.activeWordList &&
+        state.teacher.activeWordList.wordListName === item.wordListName &&
+        state.teacher.activeWordList.version === item.version) {
+        option.selected = true;
+      }
+      els.wordListSelect.appendChild(option);
+    });
+    renderActiveWordListText();
+  }
+
+  async function setActiveWordListForTeacher() {
+    if (!els.wordListSelect || !els.wordListSelect.value) {
+      setText(els.teacherStatusText, "Please select a shared word list first.", "var(--warn)");
+      return;
+    }
+    const parts = els.wordListSelect.value.split("|");
+    const wordListName = parts[0] || "";
+    const version = parts[1] || "";
+    if (!wordListName || !version) {
+      setText(els.teacherStatusText, "Invalid word list selection.", "var(--danger)");
+      return;
+    }
+    setText(els.teacherStatusText, "Updating active word list...", "var(--warn)");
+    const result = await wordBankService.setActiveWordList(wordListName, version);
+    if (result.ok) {
+      state.teacher.activeWordList = result.active || { wordListName, version };
+      renderActiveWordListText();
+      setText(els.teacherStatusText, "Assigned. Students will use this list on next load.", "var(--ok)");
+      const active = await wordBankService.loadActiveWordList();
+      if (active.words.length) {
+        state.words = active.words;
+        state.wordSource = "shared";
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE, "shared");
+        updateWordBankBadge();
+      }
+      return;
+    }
+    setText(els.teacherStatusText, "Assign failed: " + (result.error || "unknown error"), "var(--danger)");
+  }
+
+  function renderActiveWordListText() {
+    if (!els.activeWordListText) return;
+    if (!state.teacher.activeWordList) {
+      setText(els.activeWordListText, "Active shared word list: not set.", "var(--warn)");
+      return;
+    }
+    setText(
+      els.activeWordListText,
+      "Active shared word list: " + state.teacher.activeWordList.wordListName + " (" + state.teacher.activeWordList.version + ")",
+      "var(--ok)"
+    );
   }
 
   function renderDraftTable() {
@@ -630,8 +706,8 @@
     els.wordBankBadge.style.color = color;
   }
 
-  function refreshLeaderboard() {
-    const rankList = scoreService.loadLeaderboard();
+  async function refreshLeaderboard() {
+    const rankList = await scoreService.loadLeaderboard();
     els.rankTableBody.innerHTML = "";
     if (!rankList.length) {
       const row = document.createElement("tr");
@@ -646,7 +722,7 @@
         "<td>" + item.totalScore + "</td>" +
         "<td>" + item.correct + "</td>" +
         "<td>" + item.failed + "</td>" +
-        "<td>" + new Date(item.timestamp).toLocaleString() + "</td>";
+        "<td>" + new Date(item.lastPlayTime || item.timestamp).toLocaleString() + "</td>";
       els.rankTableBody.appendChild(row);
     });
   }
@@ -804,8 +880,12 @@
   function StorageAdapter() {}
   StorageAdapter.prototype.saveScore = async function () {};
   StorageAdapter.prototype.saveGameRecord = function () {};
+  StorageAdapter.prototype.loadLeaderboard = async function () { return []; };
   StorageAdapter.prototype.loadLocalWordList = function () { return []; };
   StorageAdapter.prototype.saveLocalWordList = function () {};
+  StorageAdapter.prototype.listWordLists = async function () { return { wordLists: [], active: null }; };
+  StorageAdapter.prototype.setActiveWordList = async function () { return { ok: false }; };
+  StorageAdapter.prototype.loadActiveWordList = async function () { return { words: [], active: null }; };
   StorageAdapter.prototype.loadSharedWordList = async function () { return []; };
   StorageAdapter.prototype.publishWordList = async function () { return { ok: false }; };
   StorageAdapter.prototype.retryPending = async function () { return { success: 0, failed: 0 }; };
@@ -881,8 +961,15 @@
   SheetStorage.prototype.saveGameRecord = function (sessionRecord) {
     this.fallback.saveGameRecord(sessionRecord);
   };
-  SheetStorage.prototype.loadLeaderboard = function () {
-    return this.fallback.loadLeaderboard();
+  SheetStorage.prototype.loadLeaderboard = async function () {
+    if (location.protocol === "file:") return this.fallback.loadLeaderboard();
+    try {
+      const result = await this.apiClient.post("loadLeaderboard", { limit: 100 });
+      const rankings = result.data && Array.isArray(result.data.rankings) ? result.data.rankings : [];
+      return rankings;
+    } catch (error) {
+      return this.fallback.loadLeaderboard();
+    }
   };
   SheetStorage.prototype.loadScores = function () {
     return this.fallback.loadScores();
@@ -892,6 +979,41 @@
   };
   SheetStorage.prototype.loadLocalWordList = function () {
     return this.fallback.loadLocalWordList();
+  };
+  SheetStorage.prototype.listWordLists = async function () {
+    if (location.protocol === "file:") return { wordLists: [], active: null };
+    try {
+      const result = await this.apiClient.post("listWordLists", {});
+      return {
+        wordLists: result.data && Array.isArray(result.data.wordLists) ? result.data.wordLists : [],
+        active: result.data ? result.data.active || null : null
+      };
+    } catch (error) {
+      return { wordLists: [], active: null };
+    }
+  };
+  SheetStorage.prototype.setActiveWordList = async function (wordListName, version) {
+    if (location.protocol === "file:") return { ok: false, error: "file mode" };
+    try {
+      const result = await this.apiClient.post("setActiveWordList", { wordListName, version });
+      return { ok: true, active: result.data ? result.data.active || null : null };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  };
+  SheetStorage.prototype.loadActiveWordList = async function () {
+    if (location.protocol === "file:") {
+      return { words: this.fallback.loadSharedWordListCache(), active: null };
+    }
+    try {
+      const result = await this.apiClient.post("loadActiveWordList", {});
+      const words = normalizeWords(result.data && result.data.words ? result.data.words : []);
+      const active = result.data ? result.data.active || null : null;
+      if (words.length) this.fallback.saveSharedWordListCache(words);
+      return { words, active };
+    } catch (error) {
+      return { words: this.fallback.loadSharedWordListCache(), active: null };
+    }
   };
   SheetStorage.prototype.loadSharedWordList = async function () {
     if (location.protocol === "file:") return this.fallback.loadSharedWordListCache();
@@ -953,7 +1075,7 @@
   ScoreService.prototype.getPendingCount = function () {
     return localFallback.loadPendingRemote().length;
   };
-  ScoreService.prototype.loadLeaderboard = function () {
+  ScoreService.prototype.loadLeaderboard = async function () {
     return this.storage.loadLeaderboard();
   };
   ScoreService.prototype.exportScoresCsv = function () {
@@ -975,6 +1097,15 @@
   };
   WordBankService.prototype.publishWordList = async function (payload) {
     return this.storage.publishWordList(payload);
+  };
+  WordBankService.prototype.listWordLists = async function () {
+    return this.storage.listWordLists();
+  };
+  WordBankService.prototype.setActiveWordList = async function (wordListName, version) {
+    return this.storage.setActiveWordList(wordListName, version);
+  };
+  WordBankService.prototype.loadActiveWordList = async function () {
+    return this.storage.loadActiveWordList();
   };
   WordBankService.prototype.loadSharedWordList = async function () {
     return this.storage.loadSharedWordList();
