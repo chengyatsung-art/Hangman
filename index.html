@@ -39,18 +39,17 @@
             学号
             <input id="studentId" type="text" placeholder="只允许字母、数字、_、-" required />
           </label>
-          <label>
-            模式
-            <span class="tip">模式由老师统一设置</span>
-          </label>
-          <p id="studentModeHint" class="msg"></p>
           <label id="studentWordListWrap" class="hidden">
             练习词库
             <select id="studentWordListSelect">
               <option value="">请选择词库</option>
             </select>
           </label>
-          <button type="submit" class="primary">进入游戏</button>
+          <div class="student-submit-wrap">
+            <button type="submit" class="primary">进入游戏</button>
+            <p class="tip student-mode-tip">模式由老师统一设置</p>
+            <p id="studentModeHint" class="msg"></p>
+          </div>
         </form>
         <p id="studentFormMsg" class="msg"></p>
       </div>
@@ -76,6 +75,10 @@
             <line class="part" data-step="4" x1="110" y1="80" x2="132" y2="98"></line>
             <line class="part" data-step="5" x1="110" y1="110" x2="92" y2="138"></line>
             <line class="part" data-step="6" x1="110" y1="110" x2="128" y2="138"></line>
+            <line class="part" data-step="7" x1="104" y1="52" x2="108" y2="56"></line>
+            <line class="part" data-step="8" x1="108" y1="52" x2="104" y2="56"></line>
+            <line class="part" data-step="9" x1="112" y1="52" x2="116" y2="56"></line>
+            <line class="part" data-step="10" x1="116" y1="52" x2="112" y2="56"></line>
           </svg>
           <div class="word-box">
             <p id="wordSlots" class="slots"></p>
@@ -175,7 +178,7 @@
         </div>
         <p id="activeGameModeText" class="msg"></p>
         <div class="actions">
-          <input id="teacherMaxWrongGuesses" type="number" min="1" max="20" step="1" value="10" />
+          <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
           <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
         </div>
         <p id="activeMaxWrongGuessesText" class="msg"></p>

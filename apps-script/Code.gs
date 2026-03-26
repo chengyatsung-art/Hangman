@@ -290,7 +290,7 @@ function getMaxWrongGuesses_() {
   var raw = Number(getSetting_("maxWrongGuesses"));
   if (isNaN(raw)) raw = 10;
   if (raw < 1) raw = 1;
-  if (raw > 20) raw = 20;
+  if (raw > 10) raw = 10;
   return Math.round(raw);
 }
 
@@ -298,7 +298,7 @@ function setMaxWrongGuesses_(payload) {
   var raw = Number(payload && payload.maxWrongGuesses);
   if (isNaN(raw)) throw new Error("maxWrongGuesses must be a number");
   raw = Math.round(raw);
-  if (raw < 1 || raw > 20) throw new Error("maxWrongGuesses must be between 1 and 20");
+  if (raw < 1 || raw > 10) throw new Error("maxWrongGuesses must be between 1 and 10");
   setSetting_("maxWrongGuesses", raw);
   setSetting_("maxWrongGuessesUpdatedAt", new Date().toISOString());
 }

@@ -329,7 +329,7 @@
   }
 
   function buildKeyboard() {
-    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const letters = "abcdefghijklmnopqrstuvwxyz".split("");
     els.keyboard.innerHTML = "";
     letters.forEach((letter) => {
       const button = document.createElement("button");
@@ -375,8 +375,8 @@
   function renderWord() {
     const wordObj = state.game.currentWordObj;
     if (!wordObj) return;
-    const upper = wordObj.word.toUpperCase();
-    els.wordSlots.textContent = upper.split("").map((ch) => (state.game.guessed.has(ch) ? ch : "_")).join(" ");
+    const lower = wordObj.word.toLowerCase();
+    els.wordSlots.textContent = lower.split("").map((ch) => (state.game.guessed.has(ch) ? ch : "_")).join(" ");
     els.meaningText.textContent = state.showMeaning ? ("释义：" + (wordObj.meaning || "无")) : "释义已隐藏";
   }
 
@@ -384,8 +384,8 @@
     if (state.game.questionEnded || !state.game.currentWordObj || state.game.guessed.has(letter)) return;
     state.game.guessed.add(letter);
     disableKey(letter);
-    const upperWord = state.game.currentWordObj.word.toUpperCase();
-    if (!upperWord.includes(letter)) {
+    const lowerWord = state.game.currentWordObj.word.toLowerCase();
+    if (!lowerWord.includes(letter)) {
       state.game.wrongGuesses += 1;
       renderHangman();
     }
@@ -395,7 +395,7 @@
 
   function useHint() {
     if (state.game.questionEnded || !state.game.currentWordObj) return;
-    const word = state.game.currentWordObj.word.toUpperCase();
+    const word = state.game.currentWordObj.word.toLowerCase();
     const hidden = word.split("").filter((ch) => !state.game.guessed.has(ch));
     if (!hidden.length) {
       setText(els.questionResultText, "当前题目已全部猜出。");
@@ -409,7 +409,7 @@
 
   function evaluateQuestion() {
     const wordObj = state.game.currentWordObj;
-    const word = wordObj.word.toUpperCase();
+    const word = wordObj.word.toLowerCase();
     const allHit = word.split("").every((ch) => state.game.guessed.has(ch));
     const failed = state.game.wrongGuesses >= state.teacher.maxWrongGuesses;
     if (!allHit && !failed) return;
@@ -424,7 +424,7 @@
       setText(els.questionResultText, "答对了。", "var(--ok)");
     } else {
       state.session.failed += 1;
-      setText(els.questionResultText, "答错了，答案是 " + wordObj.word.toUpperCase(), "var(--danger)");
+      setText(els.questionResultText, "答错了，答案是 " + wordObj.word.toLowerCase(), "var(--danger)");
     }
     state.session.totalScore += score;
 
@@ -511,9 +511,15 @@
   }
 
   function renderHangman() {
-    document.querySelectorAll("#hangmanSvg .part").forEach((part) => {
-      const step = Number(part.dataset.step || 0);
-      part.classList.toggle("show", step <= state.game.wrongGuesses);
+    const parts = Array.from(document.querySelectorAll("#hangmanSvg .part")).sort((a, b) => {
+      return Number(a.dataset.step || 0) - Number(b.dataset.step || 0);
+    });
+    const totalParts = parts.length;
+    const maxWrong = Math.max(1, normalizeMaxWrongGuesses(state.teacher.maxWrongGuesses));
+    const progress = Math.min(maxWrong, Math.max(0, state.game.wrongGuesses));
+    const visibleParts = progress <= 0 ? 0 : Math.min(totalParts, Math.ceil((progress / maxWrong) * totalParts));
+    parts.forEach((part, index) => {
+      part.classList.toggle("show", index < visibleParts);
     });
   }
 
@@ -972,7 +978,7 @@
   function normalizeMaxWrongGuesses(value) {
     const num = Number(value);
     if (Number.isNaN(num)) return 10;
-    return Math.max(1, Math.min(20, Math.round(num)));
+    return Math.max(1, Math.min(10, Math.round(num)));
   }
 
   function dedupeWords(words) {
