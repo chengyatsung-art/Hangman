@@ -767,7 +767,7 @@
       if (location.protocol === "file:") {
         setText(els.studentModeHint, "当前为本地模式：优先使用本地草稿词库，无草稿则使用默认词库。", "var(--warn)");
       } else {
-        setText(els.studentModeHint, "当前为练习模式，可选择词库进行练习。", "var(--ok)");
+        setText(els.studentModeHint, "当前为练习模式：有公共词库时必须先选择；若暂无公共词库则使用默认词库。", "var(--ok)");
       }
     } else {
       setText(els.studentModeHint, "当前为正式模式，词库由老师统一指定。", "var(--warn)");
@@ -803,9 +803,25 @@
       return true;
     }
 
+    if (!state.teacher.wordLists.length) {
+      const latest = await wordBankService.listWordLists();
+      state.teacher.wordLists = latest.wordLists || [];
+      state.teacher.activeWordList = latest.active || state.teacher.activeWordList;
+      renderStudentWordListOptions();
+    }
+
+    if (!state.teacher.wordLists.length) {
+      state.words = normalizeWords(DEFAULT_WORDS);
+      state.wordSource = "default";
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE, "default");
+      setText(els.studentFormMsg, "当前没有可用的公共词库，已自动使用内置默认词库。", "var(--warn)");
+      updateWordBankBadge();
+      return true;
+    }
+
     const selected = els.studentWordListSelect ? els.studentWordListSelect.value : "";
     if (!selected) {
-      setText(els.studentFormMsg, "请选择练习词库后再开始。", "var(--warn)");
+      setText(els.studentFormMsg, "请先选择一个公共词库后再开始练习。", "var(--warn)");
       return false;
     }
     const parts = selected.split("|");
