@@ -541,14 +541,15 @@
     setText(els.teacherStatusText, "正在解析文件...");
     try {
       const content = await file.text();
+      const wordListName = (els.wordListName.value || "未命名词库").trim();
       const category = (els.categoryInput.value || "General").trim();
       const difficulty = els.difficultyInput.value;
       const lower = file.name.toLowerCase();
       const parsed = lower.endsWith(".json")
-        ? parseJsonWords(content, category, difficulty)
+        ? parseJsonWords(content, wordListName, category, difficulty)
         : lower.endsWith(".csv")
-          ? parseCsvWords(content, category, difficulty)
-          : parseTxtWords(content, category, difficulty);
+          ? parseCsvWords(content, wordListName, category, difficulty)
+          : parseTxtWords(content, wordListName, category, difficulty);
       state.teacher.draftWords = dedupeWords(state.teacher.draftWords.concat(normalizeWords(parsed)));
       wordBankService.saveLocalWordList(state.teacher.draftWords);
       renderDraftTable();
@@ -977,6 +978,11 @@
       meaning: String(item.meaning || "").trim(),
       category: String(item.category || "General").trim(),
       difficulty: normalizeDifficulty(item.difficulty),
+      wordListName: String(item.wordListName || "").trim(),
+      teacherName: String(item.teacherName || "").trim(),
+      publishTime: item.publishTime || "",
+      status: String(item.status || "").trim(),
+      source: String(item.source || "").trim(),
       version: item.version || ""
     };
   }
@@ -1010,26 +1016,44 @@
     return result;
   }
 
-  function parseTxtWords(content, category, difficulty) {
+  function parseTxtWords(content, wordListName, category, difficulty) {
     return content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
       const parts = line.split(",");
-      return { word: (parts[0] || "").trim(), meaning: (parts[1] || "").trim(), category, difficulty };
+      return {
+        wordListName,
+        word: (parts[0] || "").trim(),
+        meaning: (parts[1] || "").trim(),
+        category,
+        difficulty
+      };
     });
   }
 
-  function parseCsvWords(content, category, difficulty) {
+  function parseCsvWords(content, wordListName, category, difficulty) {
     return content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
       const cols = line.split(",").map((c) => c.trim());
-      return { word: cols[0] || "", meaning: cols[1] || "", category: cols[2] || category, difficulty: cols[3] || difficulty };
+      return {
+        wordListName: cols[4] || wordListName,
+        word: cols[0] || "",
+        meaning: cols[1] || "",
+        category: cols[2] || category,
+        difficulty: cols[3] || difficulty
+      };
     });
   }
 
-  function parseJsonWords(content, category, difficulty) {
+  function parseJsonWords(content, wordListName, category, difficulty) {
     const data = JSON.parse(content);
     if (!Array.isArray(data)) return [];
     return data.map((item) => typeof item === "string"
-      ? { word: item, meaning: "", category, difficulty }
-      : { word: item.word || "", meaning: item.meaning || "", category: item.category || category, difficulty: item.difficulty || difficulty });
+      ? { wordListName, word: item, meaning: "", category, difficulty }
+      : {
+        wordListName: item.wordListName || wordListName,
+        word: item.word || "",
+        meaning: item.meaning || "",
+        category: item.category || category,
+        difficulty: item.difficulty || difficulty
+      });
   }
 
   function displayDifficulty(v) {
