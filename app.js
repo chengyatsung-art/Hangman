@@ -8,7 +8,8 @@
     GAME_RECORDS: "hangman_game_records_v1",
     PENDING_REMOTE: "hangman_pending_remote_v1",
     ACTIVE_WORD_SOURCE: "hangman_active_word_source_v1",
-    TEACHER_UNLOCKED: "hangman_teacher_unlocked_v1"
+    TEACHER_UNLOCKED: "hangman_teacher_unlocked_v1",
+    ALLOW_WORD_REPEAT: "hangman_allow_word_repeat_v1"
   };
 
   const CONFIG = Object.assign({
@@ -16,7 +17,8 @@
     apiMode: "direct",
     proxyEndpoint: "/.netlify/functions/sheet-proxy",
     maxWrongGuesses: 10,
-    teacherPassword: "cys88888888"
+    teacherPassword: "cys88888888",
+    allowWordRepeat: false
   }, window.HANGMAN_CONFIG || {});
 
   const DEFAULT_WORDS = [
@@ -52,7 +54,8 @@
       correct: 0,
       failed: 0,
       totalScore: 0,
-      records: []
+      records: [],
+      remainingWordIndexes: []
     },
     teacher: {
       draftWords: [],
@@ -60,7 +63,8 @@
       wordLists: [],
       activeWordList: null,
       activeGameMode: "practice",
-      maxWrongGuesses: normalizeMaxWrongGuesses(CONFIG.maxWrongGuesses)
+      maxWrongGuesses: normalizeMaxWrongGuesses(CONFIG.maxWrongGuesses),
+      allowWordRepeat: normalizeAllowWordRepeat(CONFIG.allowWordRepeat)
     }
   };
 
@@ -142,6 +146,8 @@
       teacherMaxWrongGuesses: document.getElementById("teacherMaxWrongGuesses"),
       setMaxWrongGuessesBtn: document.getElementById("setMaxWrongGuessesBtn"),
       activeMaxWrongGuessesText: document.getElementById("activeMaxWrongGuessesText"),
+      setAllowWordRepeatBtn: document.getElementById("setAllowWordRepeatBtn"),
+      activeAllowWordRepeatText: document.getElementById("activeAllowWordRepeatText"),
       teacherName: document.getElementById("teacherName"),
       wordListName: document.getElementById("wordListName"),
       categoryInput: document.getElementById("categoryInput"),
@@ -193,12 +199,13 @@
       }
       const activeGameMode = await resolveActiveGameMode();
       await resolveMaxWrongGuesses();
+      await resolveAllowWordRepeat();
       if (activeGameMode === "practice") {
         const selected = await applyStudentSelectedWordList();
         if (!selected) return;
       }
       state.student = { name, studentId, mode: activeGameMode };
-      state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [] };
+      state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [], remainingWordIndexes: [] };
       setText(els.studentFormMsg, "");
       els.startCard.classList.add("hidden");
       els.resultCard.classList.add("hidden");
@@ -255,6 +262,9 @@
     els.setActiveWordListBtn.addEventListener("click", setActiveWordListForTeacher);
     els.setGameModeBtn.addEventListener("click", setActiveGameModeForTeacher);
     els.setMaxWrongGuessesBtn.addEventListener("click", setMaxWrongGuessesForTeacher);
+    if (els.setAllowWordRepeatBtn) {
+      els.setAllowWordRepeatBtn.addEventListener("click", setAllowWordRepeatForTeacher);
+    }
   }
 
   function isTeacherUnlocked() {
@@ -350,7 +360,11 @@
       return;
     }
 
-    const currentWordObj = state.words[Math.floor(Math.random() * state.words.length)];
+    const currentWordObj = pickNextWord();
+    if (!currentWordObj) {
+      setText(els.questionResultText, "暂无可用词条，请检查词库。", "var(--danger)");
+      return;
+    }
     state.game.currentWordObj = currentWordObj;
     state.game.guessed = new Set();
     state.game.wrongGuesses = 0;
@@ -496,7 +510,7 @@
 
   function resetSession() {
     state.student = null;
-    state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [] };
+    state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [], remainingWordIndexes: [] };
     els.gameCard.classList.add("hidden");
     els.resultCard.classList.add("hidden");
     els.startCard.classList.remove("hidden");
@@ -638,6 +652,11 @@
     state.teacher.activeWordList = result.active || null;
     state.teacher.activeGameMode = normalizeGameMode(result.activeGameMode || state.teacher.activeGameMode);
     state.teacher.maxWrongGuesses = normalizeMaxWrongGuesses(result.maxWrongGuesses || state.teacher.maxWrongGuesses);
+    if (typeof result.allowWordRepeat !== "undefined") {
+      state.teacher.allowWordRepeat = normalizeAllowWordRepeat(result.allowWordRepeat);
+    } else {
+      state.teacher.allowWordRepeat = await wordBankService.loadAllowWordRepeat();
+    }
 
     if (els.wordListSelect) {
       els.wordListSelect.innerHTML = '<option value="">Select shared word list...</option>';
@@ -660,6 +679,7 @@
     if (els.teacherMaxWrongGuesses) els.teacherMaxWrongGuesses.value = String(state.teacher.maxWrongGuesses);
     renderActiveGameModeText();
     renderActiveMaxWrongGuessesText();
+    renderActiveAllowWordRepeatText();
   }
 
   async function setActiveWordListForTeacher() {
@@ -733,6 +753,23 @@
     setText(els.teacherStatusText, "最大尝试次数已更新。", "var(--ok)");
   }
 
+  async function setAllowWordRepeatForTeacher() {
+    const nextValue = !state.teacher.allowWordRepeat;
+    setText(els.teacherStatusText, "Updating word repeat setting...", "var(--warn)");
+    const result = await wordBankService.setAllowWordRepeat(nextValue);
+    if (!result.ok) {
+      setText(els.teacherStatusText, "Word repeat setting update failed: " + (result.error || "unknown error"), "var(--danger)");
+      return;
+    }
+    state.teacher.allowWordRepeat = normalizeAllowWordRepeat(result.allowWordRepeat);
+    renderActiveAllowWordRepeatText();
+    if (result.remoteSynced === false) {
+      setText(els.teacherStatusText, "重复出词设置已本地生效，远端同步失败。", "var(--warn)");
+      return;
+    }
+    setText(els.teacherStatusText, "重复出词设置已更新。", "var(--ok)");
+  }
+
   function renderActiveGameModeText() {
     if (!els.activeGameModeText) return;
     const mode = normalizeGameMode(state.teacher.activeGameMode);
@@ -754,9 +791,44 @@
     return state.teacher.maxWrongGuesses;
   }
 
+  async function resolveAllowWordRepeat() {
+    const value = await wordBankService.loadAllowWordRepeat();
+    state.teacher.allowWordRepeat = normalizeAllowWordRepeat(value);
+    renderActiveAllowWordRepeatText();
+    return state.teacher.allowWordRepeat;
+  }
+
   function renderActiveMaxWrongGuessesText() {
     if (!els.activeMaxWrongGuessesText) return;
     setText(els.activeMaxWrongGuessesText, "Active max wrong guesses: " + state.teacher.maxWrongGuesses, "var(--ok)");
+  }
+
+  function renderActiveAllowWordRepeatText() {
+    if (els.setAllowWordRepeatBtn) {
+      els.setAllowWordRepeatBtn.textContent = state.teacher.allowWordRepeat ? "允许重复出词：开（点击切换）" : "允许重复出词：关（点击切换）";
+    }
+    if (!els.activeAllowWordRepeatText) return;
+    setText(
+      els.activeAllowWordRepeatText,
+      "Active word repeat: " + (state.teacher.allowWordRepeat ? "allowed" : "not allowed"),
+      "var(--ok)"
+    );
+  }
+
+  function pickNextWord() {
+    if (!state.words.length) return null;
+    if (state.teacher.allowWordRepeat) {
+      return state.words[Math.floor(Math.random() * state.words.length)];
+    }
+    let pool = Array.isArray(state.session.remainingWordIndexes) ? state.session.remainingWordIndexes : [];
+    pool = pool.filter((index) => Number.isInteger(index) && index >= 0 && index < state.words.length);
+    if (!pool.length) {
+      pool = state.words.map(function (_, index) { return index; });
+    }
+    const randomPos = Math.floor(Math.random() * pool.length);
+    const wordIndex = pool.splice(randomPos, 1)[0];
+    state.session.remainingWordIndexes = pool;
+    return state.words[wordIndex] || null;
   }
 
   function renderStudentModeControls() {
@@ -997,6 +1069,13 @@
     return mode === "formal" ? "formal" : "practice";
   }
 
+  function normalizeAllowWordRepeat(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  }
+
   function normalizeMaxWrongGuesses(value) {
     const num = Number(value);
     if (Number.isNaN(num)) return 10;
@@ -1138,6 +1217,8 @@
   StorageAdapter.prototype.setActiveGameMode = async function () { return { ok: false }; };
   StorageAdapter.prototype.loadMaxWrongGuesses = async function () { return 10; };
   StorageAdapter.prototype.setMaxWrongGuesses = async function () { return { ok: false }; };
+  StorageAdapter.prototype.loadAllowWordRepeat = async function () { return false; };
+  StorageAdapter.prototype.setAllowWordRepeat = async function () { return { ok: false, allowWordRepeat: false }; };
   StorageAdapter.prototype.loadSharedWordList = async function () { return []; };
   StorageAdapter.prototype.publishWordList = async function () { return { ok: false }; };
   StorageAdapter.prototype.retryPending = async function () { return { success: 0, failed: 0 }; };
@@ -1186,6 +1267,15 @@
   LocalStorageFallback.prototype.removePendingRemote = function (ids) {
     writeLocalJson(STORAGE_KEYS.PENDING_REMOTE, this.loadPendingRemote().filter((item) => ids.indexOf(item.id) < 0));
   };
+  LocalStorageFallback.prototype.loadAllowWordRepeat = function () {
+    const raw = localStorage.getItem(STORAGE_KEYS.ALLOW_WORD_REPEAT);
+    if (raw == null) return normalizeAllowWordRepeat(CONFIG.allowWordRepeat);
+    return normalizeAllowWordRepeat(raw);
+  };
+  LocalStorageFallback.prototype.setAllowWordRepeat = function (allowWordRepeat) {
+    localStorage.setItem(STORAGE_KEYS.ALLOW_WORD_REPEAT, normalizeAllowWordRepeat(allowWordRepeat) ? "1" : "0");
+    return { ok: true, allowWordRepeat: this.loadAllowWordRepeat() };
+  };
 
   function SheetStorage(apiClient, fallback) {
     this.apiClient = apiClient;
@@ -1233,17 +1323,34 @@
     return this.fallback.loadLocalWordList();
   };
   SheetStorage.prototype.listWordLists = async function () {
-    if (location.protocol === "file:") return { wordLists: [], active: null };
+    if (location.protocol === "file:") {
+      return {
+        wordLists: [],
+        active: null,
+        activeGameMode: "practice",
+        maxWrongGuesses: CONFIG.maxWrongGuesses,
+        allowWordRepeat: this.fallback.loadAllowWordRepeat()
+      };
+    }
     try {
       const result = await this.apiClient.post("listWordLists", {});
       return {
         wordLists: result.data && Array.isArray(result.data.wordLists) ? result.data.wordLists : [],
         active: result.data ? result.data.active || null : null,
         activeGameMode: result.data ? result.data.activeGameMode || "practice" : "practice",
-        maxWrongGuesses: result.data ? result.data.maxWrongGuesses || CONFIG.maxWrongGuesses : CONFIG.maxWrongGuesses
+        maxWrongGuesses: result.data ? result.data.maxWrongGuesses || CONFIG.maxWrongGuesses : CONFIG.maxWrongGuesses,
+        allowWordRepeat: result.data && Object.prototype.hasOwnProperty.call(result.data, "allowWordRepeat")
+          ? normalizeAllowWordRepeat(result.data.allowWordRepeat)
+          : this.fallback.loadAllowWordRepeat()
       };
     } catch (error) {
-      return { wordLists: [], active: null, activeGameMode: "practice", maxWrongGuesses: CONFIG.maxWrongGuesses };
+      return {
+        wordLists: [],
+        active: null,
+        activeGameMode: "practice",
+        maxWrongGuesses: CONFIG.maxWrongGuesses,
+        allowWordRepeat: this.fallback.loadAllowWordRepeat()
+      };
     }
   };
   SheetStorage.prototype.setActiveWordList = async function (wordListName, version) {
@@ -1324,6 +1431,36 @@
       };
     } catch (error) {
       return { ok: false, error: error.message };
+    }
+  };
+  SheetStorage.prototype.loadAllowWordRepeat = async function () {
+    if (location.protocol === "file:") return this.fallback.loadAllowWordRepeat();
+    try {
+      const result = await this.apiClient.post("getAllowWordRepeat", {});
+      const value = normalizeAllowWordRepeat(result.data && result.data.allowWordRepeat);
+      this.fallback.setAllowWordRepeat(value);
+      return value;
+    } catch (error) {
+      return this.fallback.loadAllowWordRepeat();
+    }
+  };
+  SheetStorage.prototype.setAllowWordRepeat = async function (allowWordRepeat) {
+    const value = normalizeAllowWordRepeat(allowWordRepeat);
+    this.fallback.setAllowWordRepeat(value);
+    if (location.protocol === "file:") {
+      return { ok: true, allowWordRepeat: value, remoteSynced: false };
+    }
+    try {
+      const result = await this.apiClient.post("setAllowWordRepeat", { allowWordRepeat: value });
+      const finalValue = normalizeAllowWordRepeat(
+        result.data && Object.prototype.hasOwnProperty.call(result.data, "allowWordRepeat")
+          ? result.data.allowWordRepeat
+          : value
+      );
+      this.fallback.setAllowWordRepeat(finalValue);
+      return { ok: true, allowWordRepeat: finalValue, remoteSynced: true };
+    } catch (error) {
+      return { ok: true, allowWordRepeat: value, remoteSynced: false, error: error.message };
     }
   };
   SheetStorage.prototype.loadSharedWordList = async function () {
@@ -1432,6 +1569,12 @@
   };
   WordBankService.prototype.setMaxWrongGuesses = async function (maxWrongGuesses) {
     return this.storage.setMaxWrongGuesses(maxWrongGuesses);
+  };
+  WordBankService.prototype.loadAllowWordRepeat = async function () {
+    return this.storage.loadAllowWordRepeat();
+  };
+  WordBankService.prototype.setAllowWordRepeat = async function (allowWordRepeat) {
+    return this.storage.setAllowWordRepeat(allowWordRepeat);
   };
   WordBankService.prototype.loadSharedWordList = async function () {
     return this.storage.loadSharedWordList();
