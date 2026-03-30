@@ -9,7 +9,8 @@
     PENDING_REMOTE: "hangman_pending_remote_v1",
     ACTIVE_WORD_SOURCE: "hangman_active_word_source_v1",
     TEACHER_UNLOCKED: "hangman_teacher_unlocked_v1",
-    ALLOW_WORD_REPEAT: "hangman_allow_word_repeat_v1"
+    ALLOW_WORD_REPEAT: "hangman_allow_word_repeat_v1",
+    AUTO_FINISH_WHEN_EXHAUSTED: "hangman_auto_finish_when_exhausted_v1"
   };
 
   const CONFIG = Object.assign({
@@ -18,7 +19,8 @@
     proxyEndpoint: "/.netlify/functions/sheet-proxy",
     maxWrongGuesses: 10,
     teacherPassword: "cys88888888",
-    allowWordRepeat: false
+    allowWordRepeat: false,
+    autoFinishWhenExhausted: false
   }, window.HANGMAN_CONFIG || {});
 
   const DEFAULT_WORDS = [
@@ -64,7 +66,8 @@
       activeWordList: null,
       activeGameMode: "practice",
       maxWrongGuesses: normalizeMaxWrongGuesses(CONFIG.maxWrongGuesses),
-      allowWordRepeat: normalizeAllowWordRepeat(CONFIG.allowWordRepeat)
+      allowWordRepeat: normalizeAllowWordRepeat(CONFIG.allowWordRepeat),
+      autoFinishWhenExhausted: normalizeAutoFinishWhenExhausted(CONFIG.autoFinishWhenExhausted)
     }
   };
 
@@ -148,6 +151,8 @@
       activeMaxWrongGuessesText: document.getElementById("activeMaxWrongGuessesText"),
       setAllowWordRepeatBtn: document.getElementById("setAllowWordRepeatBtn"),
       activeAllowWordRepeatText: document.getElementById("activeAllowWordRepeatText"),
+      setAutoFinishWhenExhaustedBtn: document.getElementById("setAutoFinishWhenExhaustedBtn"),
+      activeAutoFinishWhenExhaustedText: document.getElementById("activeAutoFinishWhenExhaustedText"),
       teacherName: document.getElementById("teacherName"),
       wordListName: document.getElementById("wordListName"),
       categoryInput: document.getElementById("categoryInput"),
@@ -200,6 +205,7 @@
       const activeGameMode = await resolveActiveGameMode();
       await resolveMaxWrongGuesses();
       await resolveAllowWordRepeat();
+      await resolveAutoFinishWhenExhausted();
       if (activeGameMode === "practice") {
         const selected = await applyStudentSelectedWordList();
         if (!selected) return;
@@ -264,6 +270,9 @@
     els.setMaxWrongGuessesBtn.addEventListener("click", setMaxWrongGuessesForTeacher);
     if (els.setAllowWordRepeatBtn) {
       els.setAllowWordRepeatBtn.addEventListener("click", setAllowWordRepeatForTeacher);
+    }
+    if (els.setAutoFinishWhenExhaustedBtn) {
+      els.setAutoFinishWhenExhaustedBtn.addEventListener("click", setAutoFinishWhenExhaustedForTeacher);
     }
   }
 
@@ -356,15 +365,25 @@
   function nextQuestion() {
     if (!state.student) return;
     if (!state.words.length) {
-      setText(els.questionResultText, "词库为空，请先导入或发布词库。", "var(--danger)");
+      setText(els.questionResultText, "Word bank is empty. Please import or publish a word list first.", "var(--danger)");
       return;
+    }
+
+    if (state.game.currentWordObj && !state.game.questionEnded) {
+      state.game.wrongGuesses = normalizeMaxWrongGuesses(state.teacher.maxWrongGuesses);
+      evaluateQuestion();
     }
 
     const currentWordObj = pickNextWord();
     if (!currentWordObj) {
-      setText(els.questionResultText, "暂无可用词条，请检查词库。", "var(--danger)");
+      if (!state.teacher.allowWordRepeat && state.teacher.autoFinishWhenExhausted && state.session.records.length) {
+        finishSession("All words have been completed. Session finished automatically.");
+      } else {
+        setText(els.questionResultText, "No more words available. Please check the word bank settings.", "var(--danger)");
+      }
       return;
     }
+
     state.game.currentWordObj = currentWordObj;
     state.game.guessed = new Set();
     state.game.wrongGuesses = 0;
@@ -377,13 +396,13 @@
     renderWord();
     renderHangman();
     renderScore();
-    setText(els.questionResultText, "开始新题。");
+    setText(els.questionResultText, "New round started.");
     setText(els.uploadStatusText, "");
 
     const student = state.student;
-    els.studentInfoText.textContent = "当前学生：" + student.name + "（" + student.studentId + "）";
+    els.studentInfoText.textContent = "Student: " + student.name + " / " + student.studentId;
     const meta = currentWordObj.category + " / " + displayDifficulty(currentWordObj.difficulty) + " / " + displaySourceText();
-    els.wordMetaText.textContent = "词条信息：" + meta;
+    els.wordMetaText.textContent = "Word info: " + meta;
   }
 
   function renderWord() {
@@ -435,10 +454,10 @@
 
     if (isCorrect) {
       state.session.correct += 1;
-      setText(els.questionResultText, "答对了。", "var(--ok)");
+      setText(els.questionResultText, "Correct.", "var(--ok)");
     } else {
       state.session.failed += 1;
-      setText(els.questionResultText, "答错了，答案是 " + wordObj.word.toLowerCase(), "var(--danger)");
+      setText(els.questionResultText, "Wrong. Answer: " + wordObj.word.toLowerCase(), "var(--danger)");
     }
     state.session.totalScore += score;
 
@@ -462,6 +481,10 @@
     state.session.records.push(record);
     renderScore();
     uploadSingleRecord(record);
+
+    if (shouldAutoFinishAfterQuestion()) {
+      finishSession("All words have been completed. Session finished automatically.");
+    }
   }
 
   async function uploadSingleRecord(record) {
@@ -476,10 +499,10 @@
     }
   }
 
-  function finishSession() {
+  function finishSession(reasonText) {
     if (!state.student) return;
     if (!state.session.records.length) {
-      setText(els.questionResultText, "至少完成一题后再提交。", "var(--warn)");
+      setText(els.questionResultText, "Complete at least one word before finishing.", "var(--warn)");
       return;
     }
 
@@ -501,10 +524,15 @@
     els.resultCard.classList.remove("hidden");
     setText(
       els.summaryText,
-      "题数：" + state.session.total + "，正确：" + state.session.correct + "，失败：" + state.session.failed + "，总分：" + state.session.totalScore
+      "Total: " + state.session.total + " | Correct: " + state.session.correct + " | Failed: " + state.session.failed + " | Score: " + state.session.totalScore
     );
     const pending = scoreService.getPendingCount();
-    setText(els.summaryUploadText, pending > 0 ? ("有 " + pending + " 条成绩待补传。") : "成绩已全部上传或保存。", pending > 0 ? "var(--warn)" : "var(--ok)");
+    const uploadText = pending > 0 ? ("Pending uploads: " + pending) : "Scores have been uploaded or saved.";
+    setText(
+      els.summaryUploadText,
+      reasonText ? (reasonText + " " + uploadText) : uploadText,
+      pending > 0 ? "var(--warn)" : "var(--ok)"
+    );
     refreshLeaderboard();
   }
 
@@ -657,6 +685,11 @@
     } else {
       state.teacher.allowWordRepeat = await wordBankService.loadAllowWordRepeat();
     }
+    if (typeof result.autoFinishWhenExhausted !== "undefined") {
+      state.teacher.autoFinishWhenExhausted = normalizeAutoFinishWhenExhausted(result.autoFinishWhenExhausted);
+    } else {
+      state.teacher.autoFinishWhenExhausted = await wordBankService.loadAutoFinishWhenExhausted();
+    }
 
     if (els.wordListSelect) {
       els.wordListSelect.innerHTML = '<option value="">Select shared word list...</option>';
@@ -680,9 +713,10 @@
     renderActiveGameModeText();
     renderActiveMaxWrongGuessesText();
     renderActiveAllowWordRepeatText();
+    renderAutoFinishWhenExhaustedText();
   }
 
-  async function setActiveWordListForTeacher() {
+    async function setActiveWordListForTeacher() {
     if (!els.wordListSelect || !els.wordListSelect.value) {
       setText(els.teacherStatusText, "Please select a shared word list first.", "var(--warn)");
       return;
@@ -763,11 +797,29 @@
     }
     state.teacher.allowWordRepeat = normalizeAllowWordRepeat(result.allowWordRepeat);
     renderActiveAllowWordRepeatText();
+    renderAutoFinishWhenExhaustedText();
     if (result.remoteSynced === false) {
-      setText(els.teacherStatusText, "重复出词设置已本地生效，远端同步失败。", "var(--warn)");
+      setText(els.teacherStatusText, "Word repeat updated locally. Remote sync is unavailable.", "var(--warn)");
       return;
     }
-    setText(els.teacherStatusText, "重复出词设置已更新。", "var(--ok)");
+    setText(els.teacherStatusText, "Word repeat setting updated.", "var(--ok)");
+  }
+
+  async function setAutoFinishWhenExhaustedForTeacher() {
+    const nextValue = !state.teacher.autoFinishWhenExhausted;
+    setText(els.teacherStatusText, "Updating auto-finish setting...", "var(--warn)");
+    const result = await wordBankService.setAutoFinishWhenExhausted(nextValue);
+    if (!result.ok) {
+      setText(els.teacherStatusText, "Auto-finish setting update failed: " + (result.error || "unknown error"), "var(--danger)");
+      return;
+    }
+    state.teacher.autoFinishWhenExhausted = normalizeAutoFinishWhenExhausted(result.autoFinishWhenExhausted);
+    renderAutoFinishWhenExhaustedText();
+    if (result.remoteSynced === false) {
+      setText(els.teacherStatusText, "Auto-finish updated locally. Remote sync is unavailable.", "var(--warn)");
+      return;
+    }
+    setText(els.teacherStatusText, "Auto-finish setting updated.", "var(--ok)");
   }
 
   function renderActiveGameModeText() {
@@ -798,6 +850,13 @@
     return state.teacher.allowWordRepeat;
   }
 
+  async function resolveAutoFinishWhenExhausted() {
+    const value = await wordBankService.loadAutoFinishWhenExhausted();
+    state.teacher.autoFinishWhenExhausted = normalizeAutoFinishWhenExhausted(value);
+    renderAutoFinishWhenExhaustedText();
+    return state.teacher.autoFinishWhenExhausted;
+  }
+
   function renderActiveMaxWrongGuessesText() {
     if (!els.activeMaxWrongGuessesText) return;
     setText(els.activeMaxWrongGuessesText, "Active max wrong guesses: " + state.teacher.maxWrongGuesses, "var(--ok)");
@@ -805,12 +864,33 @@
 
   function renderActiveAllowWordRepeatText() {
     if (els.setAllowWordRepeatBtn) {
-      els.setAllowWordRepeatBtn.textContent = state.teacher.allowWordRepeat ? "允许重复出词：开（点击切换）" : "允许重复出词：关（点击切换）";
+      els.setAllowWordRepeatBtn.textContent = state.teacher.allowWordRepeat
+        ? "Allow repeated words: ON (click to toggle)"
+        : "Allow repeated words: OFF (click to toggle)";
     }
     if (!els.activeAllowWordRepeatText) return;
     setText(
       els.activeAllowWordRepeatText,
       "Active word repeat: " + (state.teacher.allowWordRepeat ? "allowed" : "not allowed"),
+      "var(--ok)"
+    );
+  }
+
+  function renderAutoFinishWhenExhaustedText() {
+    if (els.setAutoFinishWhenExhaustedBtn) {
+      els.setAutoFinishWhenExhaustedBtn.textContent = state.teacher.autoFinishWhenExhausted
+        ? "Auto-finish after word bank is exhausted: ON (click to toggle)"
+        : "Auto-finish after word bank is exhausted: OFF (click to toggle)";
+      els.setAutoFinishWhenExhaustedBtn.disabled = !!state.teacher.allowWordRepeat;
+    }
+    if (!els.activeAutoFinishWhenExhaustedText) return;
+    if (state.teacher.allowWordRepeat) {
+      setText(els.activeAutoFinishWhenExhaustedText, "Active auto-finish: ignored while word repeat is allowed", "var(--warn)");
+      return;
+    }
+    setText(
+      els.activeAutoFinishWhenExhaustedText,
+      "Active auto-finish: " + (state.teacher.autoFinishWhenExhausted ? "enabled" : "disabled"),
       "var(--ok)"
     );
   }
@@ -823,12 +903,23 @@
     let pool = Array.isArray(state.session.remainingWordIndexes) ? state.session.remainingWordIndexes : [];
     pool = pool.filter((index) => Number.isInteger(index) && index >= 0 && index < state.words.length);
     if (!pool.length) {
+      if (state.teacher.autoFinishWhenExhausted && state.session.records.length) {
+        state.session.remainingWordIndexes = [];
+        return null;
+      }
       pool = state.words.map(function (_, index) { return index; });
     }
     const randomPos = Math.floor(Math.random() * pool.length);
     const wordIndex = pool.splice(randomPos, 1)[0];
     state.session.remainingWordIndexes = pool;
     return state.words[wordIndex] || null;
+  }
+
+  function shouldAutoFinishAfterQuestion() {
+    return !state.teacher.allowWordRepeat &&
+      state.teacher.autoFinishWhenExhausted &&
+      Array.isArray(state.session.remainingWordIndexes) &&
+      state.session.remainingWordIndexes.length === 0;
   }
 
   function renderStudentModeControls() {
@@ -1076,6 +1167,13 @@
     return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
   }
 
+  function normalizeAutoFinishWhenExhausted(value) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  }
+
   function normalizeMaxWrongGuesses(value) {
     const num = Number(value);
     if (Number.isNaN(num)) return 10;
@@ -1219,6 +1317,8 @@
   StorageAdapter.prototype.setMaxWrongGuesses = async function () { return { ok: false }; };
   StorageAdapter.prototype.loadAllowWordRepeat = async function () { return false; };
   StorageAdapter.prototype.setAllowWordRepeat = async function () { return { ok: false, allowWordRepeat: false }; };
+  StorageAdapter.prototype.loadAutoFinishWhenExhausted = async function () { return false; };
+  StorageAdapter.prototype.setAutoFinishWhenExhausted = async function () { return { ok: false, autoFinishWhenExhausted: false }; };
   StorageAdapter.prototype.loadSharedWordList = async function () { return []; };
   StorageAdapter.prototype.publishWordList = async function () { return { ok: false }; };
   StorageAdapter.prototype.retryPending = async function () { return { success: 0, failed: 0 }; };
@@ -1276,6 +1376,15 @@
     localStorage.setItem(STORAGE_KEYS.ALLOW_WORD_REPEAT, normalizeAllowWordRepeat(allowWordRepeat) ? "1" : "0");
     return { ok: true, allowWordRepeat: this.loadAllowWordRepeat() };
   };
+  LocalStorageFallback.prototype.loadAutoFinishWhenExhausted = function () {
+    const raw = localStorage.getItem(STORAGE_KEYS.AUTO_FINISH_WHEN_EXHAUSTED);
+    if (raw == null) return normalizeAutoFinishWhenExhausted(CONFIG.autoFinishWhenExhausted);
+    return normalizeAutoFinishWhenExhausted(raw);
+  };
+  LocalStorageFallback.prototype.setAutoFinishWhenExhausted = function (autoFinishWhenExhausted) {
+    localStorage.setItem(STORAGE_KEYS.AUTO_FINISH_WHEN_EXHAUSTED, normalizeAutoFinishWhenExhausted(autoFinishWhenExhausted) ? "1" : "0");
+    return { ok: true, autoFinishWhenExhausted: this.loadAutoFinishWhenExhausted() };
+  };
 
   function SheetStorage(apiClient, fallback) {
     this.apiClient = apiClient;
@@ -1329,7 +1438,8 @@
         active: null,
         activeGameMode: "practice",
         maxWrongGuesses: CONFIG.maxWrongGuesses,
-        allowWordRepeat: this.fallback.loadAllowWordRepeat()
+        allowWordRepeat: this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: this.fallback.loadAutoFinishWhenExhausted()
       };
     }
     try {
@@ -1341,7 +1451,10 @@
         maxWrongGuesses: result.data ? result.data.maxWrongGuesses || CONFIG.maxWrongGuesses : CONFIG.maxWrongGuesses,
         allowWordRepeat: result.data && Object.prototype.hasOwnProperty.call(result.data, "allowWordRepeat")
           ? normalizeAllowWordRepeat(result.data.allowWordRepeat)
-          : this.fallback.loadAllowWordRepeat()
+          : this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: result.data && Object.prototype.hasOwnProperty.call(result.data, "autoFinishWhenExhausted")
+          ? normalizeAutoFinishWhenExhausted(result.data.autoFinishWhenExhausted)
+          : this.fallback.loadAutoFinishWhenExhausted()
       };
     } catch (error) {
       return {
@@ -1349,7 +1462,8 @@
         active: null,
         activeGameMode: "practice",
         maxWrongGuesses: CONFIG.maxWrongGuesses,
-        allowWordRepeat: this.fallback.loadAllowWordRepeat()
+        allowWordRepeat: this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: this.fallback.loadAutoFinishWhenExhausted()
       };
     }
   };
@@ -1461,6 +1575,36 @@
       return { ok: true, allowWordRepeat: finalValue, remoteSynced: true };
     } catch (error) {
       return { ok: true, allowWordRepeat: value, remoteSynced: false, error: error.message };
+    }
+  };
+  SheetStorage.prototype.loadAutoFinishWhenExhausted = async function () {
+    if (location.protocol === "file:") return this.fallback.loadAutoFinishWhenExhausted();
+    try {
+      const result = await this.apiClient.post("getAutoFinishWhenExhausted", {});
+      const value = normalizeAutoFinishWhenExhausted(result.data && result.data.autoFinishWhenExhausted);
+      this.fallback.setAutoFinishWhenExhausted(value);
+      return value;
+    } catch (error) {
+      return this.fallback.loadAutoFinishWhenExhausted();
+    }
+  };
+  SheetStorage.prototype.setAutoFinishWhenExhausted = async function (autoFinishWhenExhausted) {
+    const value = normalizeAutoFinishWhenExhausted(autoFinishWhenExhausted);
+    this.fallback.setAutoFinishWhenExhausted(value);
+    if (location.protocol === "file:") {
+      return { ok: true, autoFinishWhenExhausted: value, remoteSynced: false };
+    }
+    try {
+      const result = await this.apiClient.post("setAutoFinishWhenExhausted", { autoFinishWhenExhausted: value });
+      const finalValue = normalizeAutoFinishWhenExhausted(
+        result.data && Object.prototype.hasOwnProperty.call(result.data, "autoFinishWhenExhausted")
+          ? result.data.autoFinishWhenExhausted
+          : value
+      );
+      this.fallback.setAutoFinishWhenExhausted(finalValue);
+      return { ok: true, autoFinishWhenExhausted: finalValue, remoteSynced: true };
+    } catch (error) {
+      return { ok: true, autoFinishWhenExhausted: value, remoteSynced: false, error: error.message };
     }
   };
   SheetStorage.prototype.loadSharedWordList = async function () {
@@ -1575,6 +1719,12 @@
   };
   WordBankService.prototype.setAllowWordRepeat = async function (allowWordRepeat) {
     return this.storage.setAllowWordRepeat(allowWordRepeat);
+  };
+  WordBankService.prototype.loadAutoFinishWhenExhausted = async function () {
+    return this.storage.loadAutoFinishWhenExhausted();
+  };
+  WordBankService.prototype.setAutoFinishWhenExhausted = async function (autoFinishWhenExhausted) {
+    return this.storage.setAutoFinishWhenExhausted(autoFinishWhenExhausted);
   };
   WordBankService.prototype.loadSharedWordList = async function () {
     return this.storage.loadSharedWordList();

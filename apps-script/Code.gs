@@ -33,7 +33,9 @@ function doPost(e) {
       var active = getActiveWordList_();
       var activeGameMode = getActiveGameMode_();
       var maxWrongGuesses = getMaxWrongGuesses_();
-      return json_({ ok: true, data: { wordLists: wordLists, active: active, activeGameMode: activeGameMode, maxWrongGuesses: maxWrongGuesses } });
+      var allowWordRepeat = getAllowWordRepeat_();
+      var autoFinishWhenExhausted = getAutoFinishWhenExhausted_();
+      return json_({ ok: true, data: { wordLists: wordLists, active: active, activeGameMode: activeGameMode, maxWrongGuesses: maxWrongGuesses, allowWordRepeat: allowWordRepeat, autoFinishWhenExhausted: autoFinishWhenExhausted } });
     }
 
     if (action === "setActiveWordList") {
@@ -68,6 +70,24 @@ function doPost(e) {
     if (action === "setMaxWrongGuesses") {
       setMaxWrongGuesses_(payload);
       return json_({ ok: true, data: { maxWrongGuesses: getMaxWrongGuesses_() }, message: "max wrong guesses updated" });
+    }
+
+    if (action === "getAllowWordRepeat") {
+      return json_({ ok: true, data: { allowWordRepeat: getAllowWordRepeat_() } });
+    }
+
+    if (action === "setAllowWordRepeat") {
+      setAllowWordRepeat_(payload);
+      return json_({ ok: true, data: { allowWordRepeat: getAllowWordRepeat_() }, message: "allow word repeat updated" });
+    }
+
+    if (action === "getAutoFinishWhenExhausted") {
+      return json_({ ok: true, data: { autoFinishWhenExhausted: getAutoFinishWhenExhausted_() } });
+    }
+
+    if (action === "setAutoFinishWhenExhausted") {
+      setAutoFinishWhenExhausted_(payload);
+      return json_({ ok: true, data: { autoFinishWhenExhausted: getAutoFinishWhenExhausted_() }, message: "auto finish when exhausted updated" });
     }
 
     if (action === "loadLeaderboard") {
@@ -301,6 +321,50 @@ function setMaxWrongGuesses_(payload) {
   if (raw < 1 || raw > 10) throw new Error("maxWrongGuesses must be between 1 and 10");
   setSetting_("maxWrongGuesses", raw);
   setSetting_("maxWrongGuessesUpdatedAt", new Date().toISOString());
+}
+
+function getAllowWordRepeat_() {
+  var raw = String(getSetting_("allowWordRepeat") || "").trim().toLowerCase();
+  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+  return false;
+}
+
+function setAllowWordRepeat_(payload) {
+  var value = payload ? payload.allowWordRepeat : false;
+  var normalized = false;
+  if (typeof value === "boolean") {
+    normalized = value;
+  } else if (typeof value === "number") {
+    normalized = value === 1;
+  } else {
+    var text = String(value || "").trim().toLowerCase();
+    normalized = (text === "1" || text === "true" || text === "yes" || text === "on");
+  }
+  setSetting_("allowWordRepeat", normalized ? "1" : "0");
+  setSetting_("allowWordRepeatUpdatedAt", new Date().toISOString());
+}
+
+function getAutoFinishWhenExhausted_() {
+  var raw = String(getSetting_("autoFinishWhenExhausted") || "").trim().toLowerCase();
+  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+  return false;
+}
+
+function setAutoFinishWhenExhausted_(payload) {
+  var value = payload ? payload.autoFinishWhenExhausted : false;
+  var normalized = false;
+  if (typeof value === "boolean") {
+    normalized = value;
+  } else if (typeof value === "number") {
+    normalized = value === 1;
+  } else {
+    var text = String(value || "").trim().toLowerCase();
+    normalized = (text === "1" || text === "true" || text === "yes" || text === "on");
+  }
+  setSetting_("autoFinishWhenExhausted", normalized ? "1" : "0");
+  setSetting_("autoFinishWhenExhaustedUpdatedAt", new Date().toISOString());
 }
 
 function loadLeaderboard_(payload) {
