@@ -3,7 +3,7 @@ window.HANGMAN_CONFIG = {
   // 模式 B（Netlify Function 代理）：apiMode = "proxy"
   apiMode: "proxy",
   gasWebAppUrl: "https://script.google.com/macros/s/AKfycby3bcrdSKBIlBnDsm6FZLaGhX791pNdAHyv84DDOvWQoEDJAR6_rZ9sCA4zGBQjeJTR/exec",
-  proxyEndpoint: "/.netlify/functions/sheet-proxy",
+  proxyEndpoint: "/api/sheet-proxy",
   maxWrongGuesses: 10,
   allowWordRepeat: false,
   teacherPassword: "cys88888888"

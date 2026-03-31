@@ -18,6 +18,11 @@ function doPost(e) {
       return json_({ ok: true, message: "score saved" });
     }
 
+    if (action === "saveScores") {
+      saveScores_(payload);
+      return json_({ ok: true, message: "scores saved" });
+    }
+
     if (action === "publishWordList") {
       publishWordList_(payload);
       return json_({ ok: true, message: "word list published" });
@@ -120,6 +125,36 @@ function saveScore_(record) {
     record.mode || "",
     "uploaded"
   ]);
+}
+
+function saveScores_(payload) {
+  var sheet = getSheet_("Scores");
+  ensureScoreHeader_(sheet);
+  var records = payload && payload.records ? payload.records : [];
+  if (!records.length) return;
+
+  var rows = [];
+  for (var i = 0; i < records.length; i++) {
+    var record = records[i] || {};
+    rows.push([
+      record.timestamp || "",
+      record.studentName || "",
+      record.studentId || "",
+      record.word || "",
+      record.category || "",
+      record.difficulty || "",
+      record.result || "",
+      record.wrongGuesses || 0,
+      record.hintsUsed || 0,
+      record.durationSeconds || 0,
+      record.score || 0,
+      record.deviceType || "",
+      record.mode || "",
+      "uploaded"
+    ]);
+  }
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
 function publishWordList_(payload) {

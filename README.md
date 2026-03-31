@@ -93,6 +93,8 @@
 
 ### 模式 A：纯静态直连 GAS
 
+不推荐作为主方案。浏览器直连 Google Apps Script 时，可能因为 CORS / OPTIONS 预检失败而回退到本地默认词库。
+
 1. `config.js`：
    - `apiMode: "direct"`
    - `gasWebAppUrl: "https://script.google.com/macros/s/xxx/exec"`
@@ -105,7 +107,30 @@
 2. Netlify 环境变量设置：
    - `GAS_WEB_APP_URL=https://script.google.com/macros/s/xxx/exec`
 3. 已提供 `netlify/functions/sheet-proxy.js` 与 `netlify.toml`
-4. 前端会请求 `/.netlify/functions/sheet-proxy`
+4. 前端会请求 `/api/sheet-proxy`，再由 Netlify 转发到 `/.netlify/functions/sheet-proxy`
+
+## 6.1 推荐的本地测试方式（不部署 Netlify）
+
+1. 保持 `config.js` 为：
+   - `apiMode: "proxy"`
+   - `proxyEndpoint: "/api/sheet-proxy"`
+2. 在项目目录运行：
+
+```bash
+node local-server.js
+```
+
+3. 打开：
+
+```text
+http://127.0.0.1:8000
+```
+
+说明：
+
+- `local-server.js` 会同时提供静态页面和本地代理
+- 本地代理会把 `/api/sheet-proxy` 转发到 `config.js` 中的 `gasWebAppUrl`
+- 这样本地浏览器始终走同源接口，不依赖 Netlify，也不会触发直连 GAS 的浏览器跨域问题
 
 ## 6. file:// 本地运行说明
 

@@ -128,70 +128,136 @@
       <div class="card">
         <h2>老师模式</h2>
         <p class="tip">导入词库后默认仅保存本地草稿，不会自动全网同步。</p>
-        <div class="teacher-grid">
-          <label>
-            老师姓名
-            <input id="teacherName" type="text" placeholder="例如：张老师" />
-          </label>
-          <label>
-            词库名称
-            <input id="wordListName" type="text" placeholder="例如：Unit 3" />
-          </label>
-          <label>
-            分类
-            <input id="categoryInput" type="text" placeholder="例如：Animals" />
-          </label>
-          <label>
-            难度
-            <select id="difficultyInput">
-              <option value="easy">简单</option>
-              <option value="medium">中等</option>
-              <option value="hard">困难</option>
-            </select>
-          </label>
-        </div>
+        <div class="teacher-layout">
+          <div class="teacher-top-grid">
+            <section class="teacher-panel">
+              <div class="teacher-panel-head">
+                <h3>基础信息</h3>
+                <p class="tip">先填写词库元信息，再执行导入和发布。</p>
+              </div>
+              <div class="teacher-grid teacher-grid-info">
+                <label>
+                  老师姓名
+                  <input id="teacherName" type="text" placeholder="例如：张老师" />
+                </label>
+                <label>
+                  词库名称
+                  <input id="wordListName" type="text" placeholder="例如：Unit 3" />
+                </label>
+                <label>
+                  版本
+                  <input id="versionInput" type="text" placeholder="例如：综英4 / 初中 / v1" />
+                </label>
+                <label>
+                  分类
+                  <input id="categoryInput" type="text" placeholder="例如：Animals" />
+                </label>
+                <label class="teacher-field-sm">
+                  难度
+                  <select id="difficultyInput">
+                    <option value="easy">简单</option>
+                    <option value="medium">中等</option>
+                    <option value="hard">困难</option>
+                  </select>
+                </label>
+              </div>
+            </section>
 
-        <div class="actions">
-          <input id="importFileInput" type="file" accept=".txt,.csv,.json" />
-          <button id="importBtn" class="primary">导入词库到本地草稿</button>
-          <button id="dedupeBtn">去重与清洗</button>
-          <button id="clearDraftBtn" class="danger">清空本地草稿</button>
-          <button id="useDraftBtn">学生端使用本地草稿测试</button>
-          <button id="publishBtn" class="primary">发布到公共词库</button>
-          <button id="loadSharedBtn">读取公共词库预览</button>
-        </div>
+            <section class="teacher-panel teacher-panel-ops">
+              <div class="teacher-panel-head teacher-panel-head-inline">
+                <h3>词库操作</h3>
+                <p class="tip">先导入到本地草稿，再清洗、测试，最后决定是否发布。</p>
+              </div>
+              <div class="teacher-stack">
+                <div class="teacher-file-row">
+                  <input id="importFileInput" type="file" accept=".txt,.csv,.json" />
+                  <button id="importBtn" class="primary">导入词库到本地草稿</button>
+                </div>
+                <div class="teacher-btn-row teacher-btn-row-secondary">
+                  <button id="dedupeBtn">去重与清洗</button>
+                  <button id="useDraftBtn">学生端使用本地草稿测试</button>
+                  <button id="clearDraftBtn" class="danger">清空本地草稿</button>
+                </div>
+                <p id="teacherStatusText" class="msg teacher-inline-msg"></p>
+              </div>
+            </section>
+          </div>
 
-        <div class="actions">
-          <select id="wordListSelect">
-            <option value="">Select shared word list...</option>
-          </select>
-          <button id="refreshWordListsBtn">Refresh Word Lists</button>
-          <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
+          <section class="teacher-panel">
+            <div class="teacher-panel-head">
+              <h3>发布与分配</h3>
+              <p class="tip">发布到公共词库后，再指定学生端使用的版本。</p>
+            </div>
+            <div class="teacher-stack">
+              <div class="teacher-btn-row">
+                <button id="publishBtn" class="primary">发布到公共词库</button>
+                <button id="loadSharedBtn">读取公共词库预览</button>
+              </div>
+              <p id="teacherPublishText" class="msg teacher-inline-msg"></p>
+              <div class="teacher-assign-row">
+                <select id="wordListSelect">
+                  <option value="">Select shared word list...</option>
+                </select>
+                <button id="refreshWordListsBtn">Refresh Word Lists</button>
+                <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
+              </div>
+              <p id="activeWordListText" class="msg teacher-inline-msg"></p>
+            </div>
+          </section>
+
+          <section class="teacher-panel teacher-panel-rules">
+            <div class="teacher-panel-head">
+              <h3>学生端规则</h3>
+              <p class="tip">统一控制学生模式、尝试次数和抽词策略。</p>
+            </div>
+            <div class="teacher-rule-list">
+              <div class="teacher-rule-item">
+                <div class="teacher-rule-copy">
+                  <strong>游戏模式</strong>
+                  <p id="activeGameModeText" class="msg teacher-inline-msg"></p>
+                </div>
+                <div class="teacher-rule-controls">
+                  <select id="teacherGameMode">
+                    <option value="practice">练习模式</option>
+                    <option value="formal">正式模式</option>
+                  </select>
+                  <button id="setGameModeBtn" class="primary">设置学生模式</button>
+                </div>
+              </div>
+
+              <div class="teacher-rule-item">
+                <div class="teacher-rule-copy">
+                  <strong>最大尝试次数</strong>
+                  <p id="activeMaxWrongGuessesText" class="msg teacher-inline-msg"></p>
+                </div>
+                <div class="teacher-rule-controls">
+                  <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
+                  <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
+                </div>
+              </div>
+
+              <div class="teacher-rule-item">
+                <div class="teacher-rule-copy">
+                  <strong>重复出词</strong>
+                  <p id="activeAllowWordRepeatText" class="msg teacher-inline-msg"></p>
+                </div>
+                <div class="teacher-rule-controls teacher-rule-controls-single">
+                  <button id="setAllowWordRepeatBtn" class="primary">允许重复出词：关（点击切换）</button>
+                </div>
+              </div>
+
+              <div class="teacher-rule-item">
+                <div class="teacher-rule-copy">
+                  <strong>词库用尽自动结束</strong>
+                  <p id="activeAutoFinishWhenExhaustedText" class="msg teacher-inline-msg"></p>
+                </div>
+                <div class="teacher-rule-controls teacher-rule-controls-single">
+                  <button id="setAutoFinishWhenExhaustedBtn" class="primary">词库用尽后自动结束：关</button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-        <p id="activeWordListText" class="msg"></p>
-        <div class="actions">
-          <select id="teacherGameMode">
-            <option value="practice">练习模式</option>
-            <option value="formal">正式模式</option>
-          </select>
-          <button id="setGameModeBtn" class="primary">设置学生模式</button>
-        </div>
-        <p id="activeGameModeText" class="msg"></p>
-        <div class="actions">
-          <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
-          <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
-        </div>
-        <p id="activeMaxWrongGuessesText" class="msg"></p>
-        <div class="actions">
-          <button id="setAllowWordRepeatBtn" class="primary">允许重复出词：关（点击切换）</button>
-        </div>
-        <p id="activeAllowWordRepeatText" class="msg"></p>
-        <div class="actions">
-          <button id="setAutoFinishWhenExhaustedBtn" class="primary">Auto-finish after word bank is exhausted: OFF</button>
-        </div>
-        <p id="activeAutoFinishWhenExhaustedText" class="msg"></p>
-        <p id="teacherStatusText" class="msg"></p>
-        <p id="teacherPublishText" class="msg"></p>
       </div>
 
       <div class="card">

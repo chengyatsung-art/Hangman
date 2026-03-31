@@ -41,7 +41,7 @@
   const state = {
     student: null,
     words: [],
-    wordSource: "default",
+    wordSource: "loading",
     showMeaning: true,
     game: {
       currentWordObj: null,
@@ -77,6 +77,8 @@
   let storage;
   let scoreService;
   let wordBankService;
+  let bootstrapWordsPromise = Promise.resolve();
+  let teacherStatePromise = Promise.resolve();
 
   function init() {
     bindTabEvents();
@@ -85,12 +87,13 @@
     bindRankEvents();
     buildKeyboard();
     restoreTeacherDraft();
+    primeWordSourceFromCache();
     refreshNetworkBadge();
     updateWordBankBadge();
     refreshLeaderboard();
-    bootstrapWords();
+    bootstrapWordsPromise = bootstrapWords();
     refreshTeacherLockState();
-    loadWordListsForTeacher();
+    teacherStatePromise = loadWordListsForTeacher();
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", refreshNetworkBadge);
   }
@@ -155,6 +158,7 @@
       activeAutoFinishWhenExhaustedText: document.getElementById("activeAutoFinishWhenExhaustedText"),
       teacherName: document.getElementById("teacherName"),
       wordListName: document.getElementById("wordListName"),
+      versionInput: document.getElementById("versionInput"),
       categoryInput: document.getElementById("categoryInput"),
       difficultyInput: document.getElementById("difficultyInput"),
       teacherStatusText: document.getElementById("teacherStatusText"),
@@ -192,6 +196,7 @@
   function bindStudentEvents() {
     els.studentForm.addEventListener("submit", async function (event) {
       event.preventDefault();
+      const submitButton = event.submitter || els.studentForm.querySelector('button[type="submit"]');
       const name = els.studentName.value.trim();
       const studentId = els.studentId.value.trim();
       if (!name || !studentId) {
@@ -202,21 +207,32 @@
         setText(els.studentFormMsg, "学号格式不合法，只允许字母/数字/_/-。", "var(--danger)");
         return;
       }
-      const activeGameMode = await resolveActiveGameMode();
-      await resolveMaxWrongGuesses();
-      await resolveAllowWordRepeat();
-      await resolveAutoFinishWhenExhausted();
-      if (activeGameMode === "practice") {
-        const selected = await applyStudentSelectedWordList();
-        if (!selected) return;
+      if (submitButton) submitButton.disabled = true;
+      setText(els.studentFormMsg, "正在准备游戏，请稍候...", "var(--warn)");
+      try {
+        await Promise.all([bootstrapWordsPromise, teacherStatePromise]);
+        renderActiveGameModeText();
+        renderActiveMaxWrongGuessesText();
+        renderActiveAllowWordRepeatText();
+        renderAutoFinishWhenExhaustedText();
+        renderStudentModeControls();
+
+        const activeGameMode = normalizeGameMode(state.teacher.activeGameMode);
+        if (activeGameMode === "practice") {
+          const selected = await applyStudentSelectedWordList();
+          if (!selected) return;
+        }
+        state.student = { name, studentId, mode: activeGameMode };
+        state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [], remainingWordIndexes: [] };
+        resetGameState();
+        setText(els.studentFormMsg, "");
+        els.startCard.classList.add("hidden");
+        els.resultCard.classList.add("hidden");
+        els.gameCard.classList.remove("hidden");
+        nextQuestion();
+      } finally {
+        if (submitButton) submitButton.disabled = false;
       }
-      state.student = { name, studentId, mode: activeGameMode };
-      state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [], remainingWordIndexes: [] };
-      setText(els.studentFormMsg, "");
-      els.startCard.classList.add("hidden");
-      els.resultCard.classList.add("hidden");
-      els.gameCard.classList.remove("hidden");
-      nextQuestion();
     });
 
     els.toggleMeaningBtn.addEventListener("click", function () {
@@ -227,8 +243,11 @@
     els.hintBtn.addEventListener("click", useHint);
     els.nextBtn.addEventListener("click", nextQuestion);
     els.resetBtn.addEventListener("click", resetSession);
-    els.finishBtn.addEventListener("click", finishSession);
+    els.finishBtn.addEventListener("click", function () {
+      finishSession();
+    });
     els.restartBtn.addEventListener("click", function () {
+      resetGameState();
       els.resultCard.classList.add("hidden");
       els.startCard.classList.remove("hidden");
     });
@@ -316,6 +335,14 @@
     }
 
     const savedSource = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE);
+    if (savedSource === "shared") {
+      const cachedSharedWords = localFallback.loadSharedWordListCache();
+      if (cachedSharedWords.length) {
+        state.words = cachedSharedWords.slice();
+        state.wordSource = "shared";
+        updateWordBankBadge();
+      }
+    }
     if (savedSource === "local_draft" && state.teacher.draftWords.length) {
       state.words = state.teacher.draftWords.slice();
       state.wordSource = "local_draft";
@@ -339,6 +366,30 @@
     state.words = normalizeWords(DEFAULT_WORDS);
     state.wordSource = "default";
     updateWordBankBadge();
+  }
+
+  function primeWordSourceFromCache() {
+    if (state.teacher.draftWords.length) {
+      state.wordSource = "local_draft";
+      state.words = state.teacher.draftWords.slice();
+      return;
+    }
+    const savedSource = localStorage.getItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE);
+    if (savedSource === "shared") {
+      const cachedSharedWords = localFallback ? localFallback.loadSharedWordListCache() : [];
+      if (cachedSharedWords.length) {
+        state.wordSource = "shared";
+        state.words = cachedSharedWords.slice();
+        return;
+      }
+      state.wordSource = "loading";
+      return;
+    }
+    if (savedSource === "local_draft") {
+      state.wordSource = "local_draft";
+      return;
+    }
+    state.wordSource = "loading";
   }
 
   function restoreTeacherDraft() {
@@ -370,6 +421,11 @@
     }
 
     if (state.game.currentWordObj && !state.game.questionEnded) {
+      const shouldSkip = window.confirm("当前题目还没有完成。继续下一题会把本题判错，是否继续？");
+      if (!shouldSkip) {
+        setText(els.questionResultText, "已取消跳过当前题目。", "var(--warn)");
+        return;
+      }
       state.game.wrongGuesses = normalizeMaxWrongGuesses(state.teacher.maxWrongGuesses);
       evaluateQuestion();
     }
@@ -377,9 +433,9 @@
     const currentWordObj = pickNextWord();
     if (!currentWordObj) {
       if (!state.teacher.allowWordRepeat && state.teacher.autoFinishWhenExhausted && state.session.records.length) {
-        finishSession("All words have been completed. Session finished automatically.");
+        finishSession("所有题目已完成，系统已自动结束本局。");
       } else {
-        setText(els.questionResultText, "No more words available. Please check the word bank settings.", "var(--danger)");
+        setText(els.questionResultText, "没有更多题目了，请检查词库设置。", "var(--danger)");
       }
       return;
     }
@@ -396,13 +452,13 @@
     renderWord();
     renderHangman();
     renderScore();
-    setText(els.questionResultText, "New round started.");
+    setText(els.questionResultText, "新一题开始了。");
     setText(els.uploadStatusText, "");
 
     const student = state.student;
-    els.studentInfoText.textContent = "Student: " + student.name + " / " + student.studentId;
+    els.studentInfoText.textContent = "学生：" + student.name + " / " + student.studentId;
     const meta = currentWordObj.category + " / " + displayDifficulty(currentWordObj.difficulty) + " / " + displaySourceText();
-    els.wordMetaText.textContent = "Word info: " + meta;
+    els.wordMetaText.textContent = "单词信息：" + meta;
   }
 
   function renderWord() {
@@ -454,10 +510,10 @@
 
     if (isCorrect) {
       state.session.correct += 1;
-      setText(els.questionResultText, "Correct.", "var(--ok)");
+      setText(els.questionResultText, "回答正确。", "var(--ok)");
     } else {
       state.session.failed += 1;
-      setText(els.questionResultText, "Wrong. Answer: " + wordObj.word.toLowerCase(), "var(--danger)");
+      setText(els.questionResultText, "回答错误。答案是：" + wordObj.word.toLowerCase(), "var(--danger)");
     }
     state.session.totalScore += score;
 
@@ -480,31 +536,49 @@
     };
     state.session.records.push(record);
     renderScore();
-    uploadSingleRecord(record);
+    setText(els.uploadStatusText, "当前题目已保存，整局结束后统一提交。", "var(--ok)");
 
     if (shouldAutoFinishAfterQuestion()) {
-      finishSession("All words have been completed. Session finished automatically.");
+      finishSession("所有题目已完成，系统已自动结束本局。");
     }
   }
 
-  async function uploadSingleRecord(record) {
-    setText(els.uploadStatusText, "成绩上传中...");
-    const result = await scoreService.saveScore(record);
-    if (result.ok) {
-      record.uploadStatus = "uploaded";
-      setText(els.uploadStatusText, "成绩已上传。", "var(--ok)");
-    } else {
-      const message = location.protocol === "file:" ? "当前为本地模式，成绩已暂存到本机。" : "上传失败，已暂存本地，稍后可补传。";
-      setText(els.uploadStatusText, message, "var(--warn)");
+  async function uploadSessionRecords(records) {
+    if (!records.length) return { success: 0, failed: 0 };
+    const batchResult = await scoreService.saveScores(records);
+    if (batchResult && batchResult.ok) {
+      records.forEach((record) => {
+        record.uploadStatus = "uploaded";
+      });
+      return { success: records.length, failed: 0 };
     }
+
+    let success = 0;
+    let failed = 0;
+    for (let i = 0; i < records.length; i += 1) {
+      const record = records[i];
+      const result = await scoreService.saveScore(record);
+      if (result.ok) {
+        record.uploadStatus = "uploaded";
+        success += 1;
+      } else {
+        record.uploadStatus = "pending";
+        failed += 1;
+      }
+    }
+    return { success, failed };
   }
 
-  function finishSession(reasonText) {
+  async function finishSession(reasonText) {
     if (!state.student) return;
     if (!state.session.records.length) {
-      setText(els.questionResultText, "Complete at least one word before finishing.", "var(--warn)");
+      setText(els.questionResultText, "至少完成一题后才能结束本局。", "var(--warn)");
       return;
     }
+
+    const finalReasonText = typeof reasonText === "string" ? reasonText : "";
+    setText(els.uploadStatusText, "正在统一提交本局成绩...", "var(--warn)");
+    const uploadResult = await uploadSessionRecords(state.session.records);
 
     const sessionRecord = {
       id: "s_" + Date.now(),
@@ -527,18 +601,40 @@
       "Total: " + state.session.total + " | Correct: " + state.session.correct + " | Failed: " + state.session.failed + " | Score: " + state.session.totalScore
     );
     const pending = scoreService.getPendingCount();
-    const uploadText = pending > 0 ? ("Pending uploads: " + pending) : "Scores have been uploaded or saved.";
+    const uploadSummary = "已上传：" + uploadResult.success + " | 待补传：" + uploadResult.failed;
+    const uploadText = pending > 0 ? (uploadSummary + " | 待补传总数：" + pending) : uploadSummary;
     setText(
       els.summaryUploadText,
-      reasonText ? (reasonText + " " + uploadText) : uploadText,
+      finalReasonText ? (finalReasonText + " " + uploadText) : uploadText,
       pending > 0 ? "var(--warn)" : "var(--ok)"
     );
     refreshLeaderboard();
   }
 
+  function resetGameState() {
+    state.game = {
+      currentWordObj: null,
+      guessed: new Set(),
+      wrongGuesses: 0,
+      hintsUsed: 0,
+      startTime: 0,
+      questionEnded: false
+    };
+    resetKeyboardButtons();
+    renderHangman();
+    setText(els.wordSlots, "");
+    setText(els.meaningText, "");
+    setText(els.wordMetaText, "");
+    setText(els.studentInfoText, "");
+    setText(els.questionResultText, "");
+    setText(els.uploadStatusText, "");
+    renderScore();
+  }
+
   function resetSession() {
     state.student = null;
     state.session = { total: 0, correct: 0, failed: 0, totalScore: 0, records: [], remainingWordIndexes: [] };
+    resetGameState();
     els.gameCard.classList.add("hidden");
     els.resultCard.classList.add("hidden");
     els.startCard.classList.remove("hidden");
@@ -637,7 +733,7 @@
       wordListName: (els.wordListName.value || "未命名词库").trim(),
       category: (els.categoryInput.value || "General").trim(),
       difficulty: els.difficultyInput.value,
-      version: "v" + Date.now(),
+      version: (els.versionInput && els.versionInput.value ? els.versionInput.value : "").trim() || ("v" + Date.now()),
       source: "teacher-import",
       words: state.teacher.draftWords.map((item) => ({
         word: item.word,
@@ -728,7 +824,7 @@
       setText(els.teacherStatusText, "Invalid word list selection.", "var(--danger)");
       return;
     }
-    setText(els.teacherStatusText, "Updating active word list...", "var(--warn)");
+    setText(els.teacherStatusText, "正在更新当前词库...", "var(--warn)");
     const result = await wordBankService.setActiveWordList(wordListName, version);
     if (result.ok) {
       state.teacher.activeWordList = result.active || { wordListName, version };
@@ -743,28 +839,28 @@
       }
       return;
     }
-    setText(els.teacherStatusText, "Assign failed: " + (result.error || "unknown error"), "var(--danger)");
+    setText(els.teacherStatusText, "分配词库失败：" + (result.error || "未知错误"), "var(--danger)");
   }
 
   function renderActiveWordListText() {
     if (!els.activeWordListText) return;
     if (!state.teacher.activeWordList) {
-      setText(els.activeWordListText, "Active shared word list: not set.", "var(--warn)");
+      setText(els.activeWordListText, "当前公共词库：未设置。", "var(--warn)");
       return;
     }
     setText(
       els.activeWordListText,
-      "Active shared word list: " + state.teacher.activeWordList.wordListName + " (" + state.teacher.activeWordList.version + ")",
+      "当前公共词库：" + state.teacher.activeWordList.wordListName + " (" + state.teacher.activeWordList.version + ")",
       "var(--ok)"
     );
   }
 
   async function setActiveGameModeForTeacher() {
     const mode = normalizeGameMode(els.teacherGameMode && els.teacherGameMode.value);
-    setText(els.teacherStatusText, "Updating active game mode...", "var(--warn)");
+    setText(els.teacherStatusText, "正在更新学生游戏模式...", "var(--warn)");
     const result = await wordBankService.setActiveGameMode(mode);
     if (!result.ok) {
-      setText(els.teacherStatusText, "Mode update failed: " + (result.error || "unknown error"), "var(--danger)");
+      setText(els.teacherStatusText, "学生游戏模式更新失败：" + (result.error || "未知错误"), "var(--danger)");
       return;
     }
     state.teacher.activeGameMode = normalizeGameMode(result.activeGameMode || mode);
@@ -775,10 +871,10 @@
 
   async function setMaxWrongGuessesForTeacher() {
     const maxWrongGuesses = normalizeMaxWrongGuesses(els.teacherMaxWrongGuesses && els.teacherMaxWrongGuesses.value);
-    setText(els.teacherStatusText, "Updating max wrong guesses...", "var(--warn)");
+    setText(els.teacherStatusText, "正在更新最大尝试次数...", "var(--warn)");
     const result = await wordBankService.setMaxWrongGuesses(maxWrongGuesses);
     if (!result.ok) {
-      setText(els.teacherStatusText, "Max wrong guesses update failed: " + (result.error || "unknown error"), "var(--danger)");
+      setText(els.teacherStatusText, "最大尝试次数更新失败：" + (result.error || "未知错误"), "var(--danger)");
       return;
     }
     state.teacher.maxWrongGuesses = normalizeMaxWrongGuesses(result.maxWrongGuesses || maxWrongGuesses);
@@ -789,43 +885,43 @@
 
   async function setAllowWordRepeatForTeacher() {
     const nextValue = !state.teacher.allowWordRepeat;
-    setText(els.teacherStatusText, "Updating word repeat setting...", "var(--warn)");
+    setText(els.teacherStatusText, "正在更新重复出词设置...", "var(--warn)");
     const result = await wordBankService.setAllowWordRepeat(nextValue);
     if (!result.ok) {
-      setText(els.teacherStatusText, "Word repeat setting update failed: " + (result.error || "unknown error"), "var(--danger)");
+      setText(els.teacherStatusText, "重复出词设置更新失败：" + (result.error || "未知错误"), "var(--danger)");
       return;
     }
     state.teacher.allowWordRepeat = normalizeAllowWordRepeat(result.allowWordRepeat);
     renderActiveAllowWordRepeatText();
     renderAutoFinishWhenExhaustedText();
     if (result.remoteSynced === false) {
-      setText(els.teacherStatusText, "Word repeat updated locally. Remote sync is unavailable.", "var(--warn)");
+      setText(els.teacherStatusText, "重复出词设置已在本地更新，远程同步暂不可用。", "var(--warn)");
       return;
     }
-    setText(els.teacherStatusText, "Word repeat setting updated.", "var(--ok)");
+    setText(els.teacherStatusText, "重复出词设置已更新。", "var(--ok)");
   }
 
   async function setAutoFinishWhenExhaustedForTeacher() {
     const nextValue = !state.teacher.autoFinishWhenExhausted;
-    setText(els.teacherStatusText, "Updating auto-finish setting...", "var(--warn)");
+    setText(els.teacherStatusText, "正在更新自动结束设置...", "var(--warn)");
     const result = await wordBankService.setAutoFinishWhenExhausted(nextValue);
     if (!result.ok) {
-      setText(els.teacherStatusText, "Auto-finish setting update failed: " + (result.error || "unknown error"), "var(--danger)");
+      setText(els.teacherStatusText, "自动结束设置更新失败：" + (result.error || "未知错误"), "var(--danger)");
       return;
     }
     state.teacher.autoFinishWhenExhausted = normalizeAutoFinishWhenExhausted(result.autoFinishWhenExhausted);
     renderAutoFinishWhenExhaustedText();
     if (result.remoteSynced === false) {
-      setText(els.teacherStatusText, "Auto-finish updated locally. Remote sync is unavailable.", "var(--warn)");
+      setText(els.teacherStatusText, "自动结束设置已在本地更新，远程同步暂不可用。", "var(--warn)");
       return;
     }
-    setText(els.teacherStatusText, "Auto-finish setting updated.", "var(--ok)");
+    setText(els.teacherStatusText, "自动结束设置已更新。", "var(--ok)");
   }
 
   function renderActiveGameModeText() {
     if (!els.activeGameModeText) return;
     const mode = normalizeGameMode(state.teacher.activeGameMode);
-    setText(els.activeGameModeText, "Active game mode: " + (mode === "formal" ? "正式模式" : "练习模式"), "var(--ok)");
+    setText(els.activeGameModeText, "当前游戏模式：" + (mode === "formal" ? "正式模式" : "练习模式"), "var(--ok)");
   }
 
   async function resolveActiveGameMode() {
@@ -859,19 +955,19 @@
 
   function renderActiveMaxWrongGuessesText() {
     if (!els.activeMaxWrongGuessesText) return;
-    setText(els.activeMaxWrongGuessesText, "Active max wrong guesses: " + state.teacher.maxWrongGuesses, "var(--ok)");
+    setText(els.activeMaxWrongGuessesText, "当前最大尝试次数：" + state.teacher.maxWrongGuesses, "var(--ok)");
   }
 
   function renderActiveAllowWordRepeatText() {
     if (els.setAllowWordRepeatBtn) {
       els.setAllowWordRepeatBtn.textContent = state.teacher.allowWordRepeat
-        ? "Allow repeated words: ON (click to toggle)"
-        : "Allow repeated words: OFF (click to toggle)";
+        ? "允许重复出词：开（点击切换）"
+        : "允许重复出词：关（点击切换）";
     }
     if (!els.activeAllowWordRepeatText) return;
     setText(
       els.activeAllowWordRepeatText,
-      "Active word repeat: " + (state.teacher.allowWordRepeat ? "allowed" : "not allowed"),
+      "当前重复出词：" + (state.teacher.allowWordRepeat ? "允许" : "不允许"),
       "var(--ok)"
     );
   }
@@ -879,18 +975,18 @@
   function renderAutoFinishWhenExhaustedText() {
     if (els.setAutoFinishWhenExhaustedBtn) {
       els.setAutoFinishWhenExhaustedBtn.textContent = state.teacher.autoFinishWhenExhausted
-        ? "Auto-finish after word bank is exhausted: ON (click to toggle)"
-        : "Auto-finish after word bank is exhausted: OFF (click to toggle)";
+        ? "词库用尽后自动结束：开（点击切换）"
+        : "词库用尽后自动结束：关（点击切换）";
       els.setAutoFinishWhenExhaustedBtn.disabled = !!state.teacher.allowWordRepeat;
     }
     if (!els.activeAutoFinishWhenExhaustedText) return;
     if (state.teacher.allowWordRepeat) {
-      setText(els.activeAutoFinishWhenExhaustedText, "Active auto-finish: ignored while word repeat is allowed", "var(--warn)");
+      setText(els.activeAutoFinishWhenExhaustedText, "当前自动结束：允许重复出词时此设置不生效", "var(--warn)");
       return;
     }
     setText(
       els.activeAutoFinishWhenExhaustedText,
-      "Active auto-finish: " + (state.teacher.autoFinishWhenExhausted ? "enabled" : "disabled"),
+      "当前自动结束：" + (state.teacher.autoFinishWhenExhausted ? "开启" : "关闭"),
       "var(--ok)"
     );
   }
@@ -1072,8 +1168,18 @@
   }
 
   function updateWordBankBadge() {
-    let text = state.wordSource === "shared" ? "当前词库：已发布公共词库" : state.wordSource === "local_draft" ? "当前词库：本地草稿" : "当前词库：内置默认词库";
-    let color = state.wordSource === "shared" ? "var(--ok)" : state.wordSource === "local_draft" ? "var(--warn)" : "var(--muted)";
+    let text = "当前词库：内置默认词库";
+    let color = "var(--muted)";
+    if (state.wordSource === "shared") {
+      text = "当前词库：已发布公共词库";
+      color = "var(--ok)";
+    } else if (state.wordSource === "local_draft") {
+      text = "当前词库：本地草稿";
+      color = "var(--warn)";
+    } else if (state.wordSource === "loading") {
+      text = "当前词库：正在同步...";
+      color = "var(--warn)";
+    }
     if (location.protocol === "file:") {
       text += " | 当前为离线模式，词库尚未发布";
       color = "var(--warn)";
@@ -1303,6 +1409,7 @@
 
   function StorageAdapter() {}
   StorageAdapter.prototype.saveScore = async function () {};
+  StorageAdapter.prototype.saveScores = async function () { return { ok: false }; };
   StorageAdapter.prototype.saveGameRecord = function () {};
   StorageAdapter.prototype.loadLeaderboard = async function () { return []; };
   StorageAdapter.prototype.loadLocalWordList = function () { return []; };
@@ -1407,6 +1514,24 @@
       this.fallback.saveScore(record);
       this.fallback.savePendingRemote("saveScore", record);
       return { ok: false, pending: true, error: error.message };
+    }
+  };
+  SheetStorage.prototype.saveScores = async function (records) {
+    if (location.protocol === "file:") {
+      for (let i = 0; i < records.length; i += 1) {
+        this.fallback.saveScore(records[i]);
+        this.fallback.savePendingRemote("saveScore", records[i]);
+      }
+      return { ok: false, pending: true };
+    }
+    try {
+      await this.apiClient.post("saveScores", { records });
+      for (let i = 0; i < records.length; i += 1) {
+        this.fallback.saveScore(Object.assign({}, records[i], { uploadStatus: "uploaded" }));
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error.message };
     }
   };
   SheetStorage.prototype.saveGameRecord = function (sessionRecord) {
@@ -1657,6 +1782,9 @@
   }
   ScoreService.prototype.saveScore = async function (record) {
     return this.storage.saveScore(record);
+  };
+  ScoreService.prototype.saveScores = async function (records) {
+    return this.storage.saveScores(records);
   };
   ScoreService.prototype.saveGameRecord = function (record) {
     this.storage.saveGameRecord(record);
