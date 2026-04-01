@@ -346,6 +346,15 @@ button.ghost {
   align-items: center;
 }
 
+.rank-actions {
+  align-items: center;
+}
+
+.rank-status-text {
+  margin-top: 0;
+  min-height: 22px;
+}
+
 .teacher-layout {
   display: grid;
   gap: 18px;
@@ -354,7 +363,14 @@ button.ghost {
 
 .teacher-top-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.teacher-middle-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(380px, 1.15fr);
   gap: 18px;
   align-items: start;
 }
@@ -550,6 +566,10 @@ th {
 
 @media (max-width: 1080px) {
   .teacher-top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-middle-grid {
     grid-template-columns: 1fr;
   }
 

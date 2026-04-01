@@ -79,6 +79,7 @@
   let wordBankService;
   let bootstrapWordsPromise = Promise.resolve();
   let teacherStatePromise = Promise.resolve();
+  let leaderboardLoaded = false;
 
   function init() {
     bindTabEvents();
@@ -90,10 +91,10 @@
     primeWordSourceFromCache();
     refreshNetworkBadge();
     updateWordBankBadge();
-    refreshLeaderboard();
-    bootstrapWordsPromise = bootstrapWords();
+    bootstrapWordsPromise = Promise.resolve();
     refreshTeacherLockState();
     teacherStatePromise = loadWordListsForTeacher();
+    bootstrapWordsPromise = teacherStatePromise;
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", refreshNetworkBadge);
   }
@@ -113,6 +114,7 @@
       studentModeHint: document.getElementById("studentModeHint"),
       studentWordListWrap: document.getElementById("studentWordListWrap"),
       studentWordListSelect: document.getElementById("studentWordListSelect"),
+      studentSubmitBtn: document.getElementById("studentSubmitBtn"),
       studentFormMsg: document.getElementById("studentFormMsg"),
       startCard: document.getElementById("startCard"),
       gameCard: document.getElementById("gameCard"),
@@ -168,6 +170,7 @@
       sharedCountText: document.getElementById("sharedCountText"),
       sharedTableBody: document.getElementById("sharedTableBody"),
       refreshRankBtn: document.getElementById("refreshRankBtn"),
+      rankStatusText: document.getElementById("rankStatusText"),
       rankTableBody: document.getElementById("rankTableBody")
     };
   }
@@ -189,14 +192,24 @@
         tabPanels.forEach((p) => p.classList.remove("active"));
         button.classList.add("active");
         document.getElementById(button.dataset.tab).classList.add("active");
+        if (button.dataset.tab === "rankTab") {
+          refreshLeaderboard();
+          leaderboardLoaded = true;
+        }
       });
     });
   }
 
   function bindStudentEvents() {
+    updateStudentSubmitState();
+    if (els.studentWordListSelect) {
+      els.studentWordListSelect.addEventListener("change", function () {
+        updateStudentSubmitState();
+      });
+    }
     els.studentForm.addEventListener("submit", async function (event) {
       event.preventDefault();
-      const submitButton = event.submitter || els.studentForm.querySelector('button[type="submit"]');
+      const submitButton = event.submitter || els.studentSubmitBtn || els.studentForm.querySelector('button[type="submit"]');
       const name = els.studentName.value.trim();
       const studentId = els.studentId.value.trim();
       if (!name || !studentId) {
@@ -216,6 +229,7 @@
         renderActiveAllowWordRepeatText();
         renderAutoFinishWhenExhaustedText();
         renderStudentModeControls();
+        updateStudentSubmitState();
 
         const activeGameMode = normalizeGameMode(state.teacher.activeGameMode);
         if (activeGameMode === "practice") {
@@ -639,6 +653,7 @@
     els.resultCard.classList.add("hidden");
     els.startCard.classList.remove("hidden");
     setText(els.studentFormMsg, "已重置。");
+    updateStudentSubmitState();
   }
 
   function renderScore() {
@@ -771,7 +786,7 @@
   }
 
   async function loadWordListsForTeacher() {
-    const result = await wordBankService.listWordLists();
+    const result = await wordBankService.loadBootstrapData();
     state.teacher.wordLists = result.wordLists || [];
     state.teacher.activeWordList = result.active || null;
     state.teacher.activeGameMode = normalizeGameMode(result.activeGameMode || state.teacher.activeGameMode);
@@ -785,6 +800,21 @@
       state.teacher.autoFinishWhenExhausted = normalizeAutoFinishWhenExhausted(result.autoFinishWhenExhausted);
     } else {
       state.teacher.autoFinishWhenExhausted = await wordBankService.loadAutoFinishWhenExhausted();
+    }
+
+    if (!state.teacher.draftWords.length) {
+      const activeWords = normalizeWords(result.activeWords || []);
+      if (activeWords.length) {
+        state.words = activeWords;
+        state.wordSource = "shared";
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE, "shared");
+        localFallback.saveSharedWordListCache(activeWords);
+      } else if (!state.words.length) {
+        state.words = normalizeWords(DEFAULT_WORDS);
+        state.wordSource = "default";
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_WORD_SOURCE, "default");
+      }
+      updateWordBankBadge();
     }
 
     if (els.wordListSelect) {
@@ -803,6 +833,7 @@
     }
     renderStudentWordListOptions();
     renderStudentModeControls();
+    updateStudentSubmitState();
     renderActiveWordListText();
     if (els.teacherGameMode) els.teacherGameMode.value = state.teacher.activeGameMode;
     if (els.teacherMaxWrongGuesses) els.teacherMaxWrongGuesses.value = String(state.teacher.maxWrongGuesses);
@@ -1034,6 +1065,40 @@
     }
   }
 
+  function updateStudentSubmitState() {
+    if (!els.studentSubmitBtn) return;
+    const mode = normalizeGameMode(state.teacher.activeGameMode);
+    const button = els.studentSubmitBtn;
+
+    if (location.protocol !== "file:" && mode === "practice" && !state.teacher.wordLists.length && !state.teacher.activeWordList) {
+      button.disabled = true;
+      button.textContent = "正在加载模式...";
+      return;
+    }
+
+    if (mode === "formal") {
+      button.disabled = false;
+      button.textContent = "进入游戏";
+      return;
+    }
+
+    if (location.protocol === "file:") {
+      button.disabled = false;
+      button.textContent = "进入游戏";
+      return;
+    }
+
+    if (!state.teacher.wordLists.length) {
+      button.disabled = false;
+      button.textContent = "进入游戏";
+      return;
+    }
+
+    const selected = els.studentWordListSelect ? els.studentWordListSelect.value : "";
+    button.disabled = !selected;
+    button.textContent = selected ? "进入游戏" : "请先选择词库";
+  }
+
   function renderStudentWordListOptions() {
     if (!els.studentWordListSelect) return;
     els.studentWordListSelect.innerHTML = '<option value="">请选择词库</option>';
@@ -1048,6 +1113,7 @@
       }
       els.studentWordListSelect.appendChild(option);
     });
+    updateStudentSubmitState();
   }
 
   async function applyStudentSelectedWordList() {
@@ -1189,24 +1255,34 @@
   }
 
   async function refreshLeaderboard() {
-    const rankList = await scoreService.loadLeaderboard();
-    els.rankTableBody.innerHTML = "";
-    if (!rankList.length) {
-      const row = document.createElement("tr");
-      row.innerHTML = '<td colspan="6">暂无数据</td>';
-      els.rankTableBody.appendChild(row);
-      return;
+    if (els.refreshRankBtn) els.refreshRankBtn.disabled = true;
+    if (els.rankStatusText) setText(els.rankStatusText, "正在刷新排行榜...", "var(--warn)");
+    try {
+      const rankList = await scoreService.loadLeaderboard();
+      els.rankTableBody.innerHTML = "";
+      if (!rankList.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="6">暂无数据</td>';
+        els.rankTableBody.appendChild(row);
+        if (els.rankStatusText) setText(els.rankStatusText, "已刷新，当前暂无数据。", "var(--warn)");
+        return;
+      }
+      rankList.forEach((item) => {
+        const row = document.createElement("tr");
+        row.innerHTML = "<td>" + escapeHtml(item.studentName) + "</td>" +
+          "<td>" + escapeHtml(item.studentId) + "</td>" +
+          "<td>" + item.totalScore + "</td>" +
+          "<td>" + item.correct + "</td>" +
+          "<td>" + item.failed + "</td>" +
+          "<td>" + new Date(item.lastPlayTime || item.timestamp).toLocaleString() + "</td>";
+        els.rankTableBody.appendChild(row);
+      });
+      if (els.rankStatusText) setText(els.rankStatusText, "已刷新，共 " + rankList.length + " 条记录。", "var(--ok)");
+    } catch (error) {
+      if (els.rankStatusText) setText(els.rankStatusText, "刷新失败，请稍后重试。", "var(--danger)");
+    } finally {
+      if (els.refreshRankBtn) els.refreshRankBtn.disabled = false;
     }
-    rankList.forEach((item) => {
-      const row = document.createElement("tr");
-      row.innerHTML = "<td>" + escapeHtml(item.studentName) + "</td>" +
-        "<td>" + escapeHtml(item.studentId) + "</td>" +
-        "<td>" + item.totalScore + "</td>" +
-        "<td>" + item.correct + "</td>" +
-        "<td>" + item.failed + "</td>" +
-        "<td>" + new Date(item.lastPlayTime || item.timestamp).toLocaleString() + "</td>";
-      els.rankTableBody.appendChild(row);
-    });
   }
 
   async function handleOnline() {
@@ -1414,6 +1490,7 @@
   StorageAdapter.prototype.loadLeaderboard = async function () { return []; };
   StorageAdapter.prototype.loadLocalWordList = function () { return []; };
   StorageAdapter.prototype.saveLocalWordList = function () {};
+  StorageAdapter.prototype.loadBootstrapData = async function () { return { wordLists: [], active: null, activeWords: [] }; };
   StorageAdapter.prototype.listWordLists = async function () { return { wordLists: [], active: null }; };
   StorageAdapter.prototype.setActiveWordList = async function () { return { ok: false }; };
   StorageAdapter.prototype.loadActiveWordList = async function () { return { words: [], active: null }; };
@@ -1555,6 +1632,48 @@
   };
   SheetStorage.prototype.loadLocalWordList = function () {
     return this.fallback.loadLocalWordList();
+  };
+  SheetStorage.prototype.loadBootstrapData = async function () {
+    if (location.protocol === "file:") {
+      return {
+        wordLists: [],
+        active: null,
+        activeGameMode: "practice",
+        maxWrongGuesses: CONFIG.maxWrongGuesses,
+        allowWordRepeat: this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: this.fallback.loadAutoFinishWhenExhausted(),
+        activeWords: this.fallback.loadSharedWordListCache()
+      };
+    }
+    try {
+      const result = await this.apiClient.post("loadBootstrapData", {});
+      const data = result.data || {};
+      const activeWords = normalizeWords(data.activeWords || []);
+      if (activeWords.length) this.fallback.saveSharedWordListCache(activeWords);
+      return {
+        wordLists: Array.isArray(data.wordLists) ? data.wordLists : [],
+        active: data.active || null,
+        activeGameMode: data.activeGameMode || "practice",
+        maxWrongGuesses: data.maxWrongGuesses || CONFIG.maxWrongGuesses,
+        allowWordRepeat: Object.prototype.hasOwnProperty.call(data, "allowWordRepeat")
+          ? normalizeAllowWordRepeat(data.allowWordRepeat)
+          : this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: Object.prototype.hasOwnProperty.call(data, "autoFinishWhenExhausted")
+          ? normalizeAutoFinishWhenExhausted(data.autoFinishWhenExhausted)
+          : this.fallback.loadAutoFinishWhenExhausted(),
+        activeWords
+      };
+    } catch (error) {
+      return {
+        wordLists: [],
+        active: null,
+        activeGameMode: "practice",
+        maxWrongGuesses: CONFIG.maxWrongGuesses,
+        allowWordRepeat: this.fallback.loadAllowWordRepeat(),
+        autoFinishWhenExhausted: this.fallback.loadAutoFinishWhenExhausted(),
+        activeWords: this.fallback.loadSharedWordListCache()
+      };
+    }
   };
   SheetStorage.prototype.listWordLists = async function () {
     if (location.protocol === "file:") {
@@ -1817,6 +1936,9 @@
   };
   WordBankService.prototype.publishWordList = async function (payload) {
     return this.storage.publishWordList(payload);
+  };
+  WordBankService.prototype.loadBootstrapData = async function () {
+    return this.storage.loadBootstrapData();
   };
   WordBankService.prototype.listWordLists = async function () {
     return this.storage.listWordLists();

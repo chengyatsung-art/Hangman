@@ -46,7 +46,7 @@
             </select>
           </label>
           <div class="student-submit-wrap">
-            <button type="submit" class="primary">进入游戏</button>
+            <button id="studentSubmitBtn" type="submit" class="primary">进入游戏</button>
             <p class="tip student-mode-tip">模式由老师统一设置</p>
             <p id="studentModeHint" class="msg"></p>
           </div>
@@ -183,80 +183,82 @@
             </section>
           </div>
 
-          <section class="teacher-panel">
-            <div class="teacher-panel-head">
-              <h3>发布与分配</h3>
-              <p class="tip">发布到公共词库后，再指定学生端使用的版本。</p>
-            </div>
-            <div class="teacher-stack">
-              <div class="teacher-btn-row">
-                <button id="publishBtn" class="primary">发布到公共词库</button>
-                <button id="loadSharedBtn">读取公共词库预览</button>
+          <div class="teacher-middle-grid">
+            <section class="teacher-panel">
+              <div class="teacher-panel-head">
+                <h3>发布与分配</h3>
+                <p class="tip">发布到公共词库后，再指定学生端的版本。</p>
               </div>
-              <p id="teacherPublishText" class="msg teacher-inline-msg"></p>
-              <div class="teacher-assign-row">
-                <select id="wordListSelect">
-                  <option value="">Select shared word list...</option>
-                </select>
-                <button id="refreshWordListsBtn">Refresh Word Lists</button>
-                <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
-              </div>
-              <p id="activeWordListText" class="msg teacher-inline-msg"></p>
-            </div>
-          </section>
-
-          <section class="teacher-panel teacher-panel-rules">
-            <div class="teacher-panel-head">
-              <h3>学生端规则</h3>
-              <p class="tip">统一控制学生模式、尝试次数和抽词策略。</p>
-            </div>
-            <div class="teacher-rule-list">
-              <div class="teacher-rule-item">
-                <div class="teacher-rule-copy">
-                  <strong>游戏模式</strong>
-                  <p id="activeGameModeText" class="msg teacher-inline-msg"></p>
+              <div class="teacher-stack">
+                <div class="teacher-btn-row">
+                  <button id="publishBtn" class="primary">发布到公共词库</button>
+                  <button id="loadSharedBtn">读取公共词库预览</button>
                 </div>
-                <div class="teacher-rule-controls">
-                  <select id="teacherGameMode">
-                    <option value="practice">练习模式</option>
-                    <option value="formal">正式模式</option>
+                <p id="teacherPublishText" class="msg teacher-inline-msg"></p>
+                <div class="teacher-assign-row">
+                  <select id="wordListSelect">
+                    <option value="">Select shared word list...</option>
                   </select>
-                  <button id="setGameModeBtn" class="primary">设置学生模式</button>
+                  <button id="refreshWordListsBtn">Refresh Word Lists</button>
+                  <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
                 </div>
+                <p id="activeWordListText" class="msg teacher-inline-msg"></p>
               </div>
+            </section>
 
-              <div class="teacher-rule-item">
-                <div class="teacher-rule-copy">
-                  <strong>最大尝试次数</strong>
-                  <p id="activeMaxWrongGuessesText" class="msg teacher-inline-msg"></p>
-                </div>
-                <div class="teacher-rule-controls">
-                  <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
-                  <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
-                </div>
+            <section class="teacher-panel teacher-panel-rules">
+              <div class="teacher-panel-head">
+                <h3>学生端规则</h3>
+                <p class="tip">统一控制学生模式、尝试次数和抽词策略。</p>
               </div>
+              <div class="teacher-rule-list">
+                <div class="teacher-rule-item">
+                  <div class="teacher-rule-copy">
+                    <strong>游戏模式</strong>
+                    <p id="activeGameModeText" class="msg teacher-inline-msg"></p>
+                  </div>
+                  <div class="teacher-rule-controls">
+                    <select id="teacherGameMode">
+                      <option value="practice">练习模式</option>
+                      <option value="formal">正式模式</option>
+                    </select>
+                    <button id="setGameModeBtn" class="primary">设置学生模式</button>
+                  </div>
+                </div>
 
-              <div class="teacher-rule-item">
-                <div class="teacher-rule-copy">
-                  <strong>重复出词</strong>
-                  <p id="activeAllowWordRepeatText" class="msg teacher-inline-msg"></p>
+                <div class="teacher-rule-item">
+                  <div class="teacher-rule-copy">
+                    <strong>最大尝试次数</strong>
+                    <p id="activeMaxWrongGuessesText" class="msg teacher-inline-msg"></p>
+                  </div>
+                  <div class="teacher-rule-controls">
+                    <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
+                    <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
+                  </div>
                 </div>
-                <div class="teacher-rule-controls teacher-rule-controls-single">
-                  <button id="setAllowWordRepeatBtn" class="primary">允许重复出词：关（点击切换）</button>
-                </div>
-              </div>
 
-              <div class="teacher-rule-item">
-                <div class="teacher-rule-copy">
-                  <strong>词库用尽自动结束</strong>
-                  <p id="activeAutoFinishWhenExhaustedText" class="msg teacher-inline-msg"></p>
+                <div class="teacher-rule-item">
+                  <div class="teacher-rule-copy">
+                    <strong>重复出词</strong>
+                    <p id="activeAllowWordRepeatText" class="msg teacher-inline-msg"></p>
+                  </div>
+                  <div class="teacher-rule-controls teacher-rule-controls-single">
+                    <button id="setAllowWordRepeatBtn" class="primary">允许重复出词：关（点击切换）</button>
+                  </div>
                 </div>
-                <div class="teacher-rule-controls teacher-rule-controls-single">
-                  <button id="setAutoFinishWhenExhaustedBtn" class="primary">词库用尽后自动结束：关</button>
+
+                <div class="teacher-rule-item">
+                  <div class="teacher-rule-copy">
+                    <strong>词库用尽自动结束</strong>
+                    <p id="activeAutoFinishWhenExhaustedText" class="msg teacher-inline-msg"></p>
+                  </div>
+                  <div class="teacher-rule-controls teacher-rule-controls-single">
+                    <button id="setAutoFinishWhenExhaustedBtn" class="primary">词库用尽后自动结束：关</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </div>
 
@@ -306,8 +308,9 @@
       <div class="card">
         <h2>本地排行榜</h2>
         <p class="tip">排行榜来自本地已保存成绩（含已上传/待上传）。</p>
-        <div class="actions">
+        <div class="actions rank-actions">
           <button id="refreshRankBtn">刷新排行榜</button>
+          <p id="rankStatusText" class="msg rank-status-text"></p>
         </div>
         <div class="table-wrap">
           <table>

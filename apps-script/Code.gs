@@ -43,6 +43,11 @@ function doPost(e) {
       return json_({ ok: true, data: { wordLists: wordLists, active: active, activeGameMode: activeGameMode, maxWrongGuesses: maxWrongGuesses, allowWordRepeat: allowWordRepeat, autoFinishWhenExhausted: autoFinishWhenExhausted } });
     }
 
+    if (action === "loadBootstrapData") {
+      var bootstrap = loadBootstrapData_();
+      return json_({ ok: true, data: bootstrap });
+    }
+
     if (action === "setActiveWordList") {
       setActiveWordList_(payload);
       var current = getActiveWordList_();
@@ -179,11 +184,7 @@ function publishWordList_(payload) {
 }
 
 function loadSharedWordList_() {
-  var sheet = getSheet_("SharedWordBank");
-  ensureWordHeader_(sheet);
-  var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  var values = getSharedWordRows_();
   var result = [];
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
@@ -205,13 +206,46 @@ function loadSharedWordList_() {
 }
 
 function listWordLists_() {
+  return buildWordListsFromRows_(getSharedWordRows_());
+}
+
+function loadBootstrapData_() {
+  var active = getActiveWordList_();
+  var values = getSharedWordRows_();
+  var wordLists = buildWordListsFromRows_(values);
+
+  if (!active && wordLists.length) {
+    active = {
+      wordListName: wordLists[0].wordListName,
+      version: wordLists[0].version
+    };
+    setSetting_("activeWordListName", active.wordListName);
+    setSetting_("activeVersion", active.version);
+    setSetting_("activeUpdatedAt", new Date().toISOString());
+  }
+
+  return {
+    wordLists: wordLists,
+    active: active,
+    activeGameMode: getActiveGameMode_(),
+    maxWrongGuesses: getMaxWrongGuesses_(),
+    allowWordRepeat: getAllowWordRepeat_(),
+    autoFinishWhenExhausted: getAutoFinishWhenExhausted_(),
+    activeWords: active ? buildWordsByListFromRows_(values, active.wordListName, active.version) : []
+  };
+}
+
+function getSharedWordRows_() {
   var sheet = getSheet_("SharedWordBank");
   ensureWordHeader_(sheet);
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return [];
+  return sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+}
 
-  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+function buildWordListsFromRows_(values) {
   var map = {};
+  var i;
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
     if (String(row[7]) !== "active") continue;
@@ -299,11 +333,10 @@ function loadWordListBySelection_(payload) {
 }
 
 function loadWordsByList_(wordListName, version) {
-  var sheet = getSheet_("SharedWordBank");
-  ensureWordHeader_(sheet);
-  var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return [];
-  var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  return buildWordsByListFromRows_(getSharedWordRows_(), wordListName, version);
+}
+
+function buildWordsByListFromRows_(values, wordListName, version) {
   var result = [];
   for (var i = 0; i < values.length; i++) {
     var row = values[i];
