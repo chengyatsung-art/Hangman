@@ -1,0 +1,12 @@
+{
+  "name": "31-hangman-netlify-neon",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "netlify:dev": "npx netlify dev",
+    "import:gas-csv": "node scripts/import-gas-csv.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  }
+}
