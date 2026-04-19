@@ -226,6 +226,14 @@ button {
   transition: all 0.2s ease;
 }
 
+button:disabled,
+button.click-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+}
+
 button:hover {
   background: #f8fafd;
   border-color: #cfd9e0;

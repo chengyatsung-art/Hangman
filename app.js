@@ -29,6 +29,7 @@
     minCorrectScore: 10,
     wrongAnswerScore: 0
   };
+  const BUTTON_CLICK_LOCK_MS = 500;
 
   const DEFAULT_WORDS = [
     { word: "apple", meaning: "苹果", category: "Food", difficulty: "easy" },
@@ -95,6 +96,7 @@
   let leaderboardLoaded = false;
 
   function init() {
+    bindGlobalButtonClickGuard();
     bindTabEvents();
     bindStudentEvents();
     bindTeacherEvents();
@@ -110,6 +112,38 @@
     bootstrapWordsPromise = teacherStatePromise;
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", refreshNetworkBadge);
+  }
+
+  function bindGlobalButtonClickGuard() {
+    document.addEventListener("click", function (event) {
+      const button = event.target && event.target.closest ? event.target.closest("button") : null;
+      if (!button) return;
+      if (button.disabled || button.classList.contains("click-locked")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      const now = Date.now();
+      const lockedUntil = Number(button.dataset.clickLockedUntil || 0);
+      if (lockedUntil > now) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      button.dataset.clickLockedUntil = String(now + BUTTON_CLICK_LOCK_MS);
+      button.classList.add("click-locked");
+      button.setAttribute("aria-disabled", "true");
+      window.setTimeout(function () {
+        const currentLockedUntil = Number(button.dataset.clickLockedUntil || 0);
+        if (currentLockedUntil <= Date.now()) {
+          delete button.dataset.clickLockedUntil;
+          button.classList.remove("click-locked");
+          button.removeAttribute("aria-disabled");
+        }
+      }, BUTTON_CLICK_LOCK_MS + 50);
+    }, true);
   }
 
   function getElements() {
