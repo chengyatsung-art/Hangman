@@ -6,15 +6,18 @@
 31_Hangman/
 ├─ index.html                     # 主页面（学生/老师/排行榜）
 ├─ style.css                      # 响应式样式
-├─ config.js                      # 前端配置（直连/代理/GAS URL）
+├─ config.js                      # 前端配置
 ├─ app.js                         # 游戏逻辑 + 存储抽象 + 服务层
-├─ words.json                     # 示例词库文件（可导入）
+├─ db/
+│  └─ schema.sql                  # Neon / Postgres 初始化脚本
 ├─ netlify.toml                   # Netlify 配置
 ├─ netlify/
 │  └─ functions/
-│     └─ sheet-proxy.js           # 模式 B: Netlify Function 代理
-└─ apps-script/
-   └─ Code.gs                     # Google Apps Script 后端示例
+│     └─ sheet-proxy.js           # Netlify Function（优先 Neon）
+├─ scripts/
+│  └─ import-gas-csv.js           # Google Sheets CSV -> Neon 导入脚本
+├─ package.json
+└─ package-lock.json
 ```
 
 ## 2. MVP 功能清单
@@ -26,7 +29,7 @@
 - 老师模式：导入词库（txt/csv/json）-> 本地草稿预览 -> 删除 -> 去重清洗 -> 发布
 - 明确状态区分：
   - `当前词库：本地草稿`
-  - `当前词库：已发布公共词库`
+  - `当前词库：在线词库`
   - `当前为离线模式，词库尚未发布`
 - `file://` 兼容：
   - 双击 `index.html` 可直接游玩
@@ -72,65 +75,77 @@
 9. `version`
 10. `source`
 
-## 4. Google Apps Script 接入说明
+## 4. Netlify 部署说明
 
-1. 新建 Google Sheet，记下 `SPREADSHEET_ID`
-2. 打开 Apps Script，粘贴 `apps-script/Code.gs`
-3. 在 Script Properties 增加：
-   - `SPREADSHEET_ID=你的表格ID`
-4. 部署为 Web App：
-   - Execute as: Me
-   - Who has access: Anyone with the link
-5. 得到 Web App URL，填到 `config.js` 的 `gasWebAppUrl`
+### 模式 0：Netlify Functions + Neon（当前推荐）
 
-### doPost 支持 action
+1. 在 `Neon` 新建一个 Postgres 数据库
+2. 打开 Neon SQL Editor，执行 `db/schema.sql`
+3. 在 Netlify 环境变量中配置：
+   - `DATABASE_URL=你的 Neon 连接串`
+4. 部署到 Netlify 后，前端仍然请求 `/api/sheet-proxy`
+5. `netlify/functions/sheet-proxy.js` 会优先走 `DATABASE_URL`
+6. 如果 `DATABASE_URL` 未配置，函数才会回退到旧的 GAS 代理模式
+7. 如需迁移旧数据，先从 Google Sheets 导出 `Scores`、`SharedWordBank`、`Settings` 为 CSV，再运行导入脚本
 
-- `saveScore`
-- `publishWordList`
-- `loadSharedWordList`
+说明：
 
-## 5. Netlify 部署说明
+- 前端 `action + payload` 协议保持不变
+- `config.js` 中现有 `proxyEndpoint` 可继续使用
+- `gasWebAppUrl` 现在只作为旧模式兜底，不再是主方案
 
-### 模式 A：纯静态直连 GAS
+### Google Sheets CSV 导入 Neon
 
-不推荐作为主方案。浏览器直连 Google Apps Script 时，可能因为 CORS / OPTIONS 预检失败而回退到本地默认词库。
-
-1. `config.js`：
-   - `apiMode: "direct"`
-   - `gasWebAppUrl: "https://script.google.com/macros/s/xxx/exec"`
-2. 将整个目录部署到 Netlify（拖拽或 Git）
-
-### 模式 B：Netlify Function 代理
-
-1. `config.js`：
-   - `apiMode: "proxy"`
-2. Netlify 环境变量设置：
-   - `GAS_WEB_APP_URL=https://script.google.com/macros/s/xxx/exec`
-3. 已提供 `netlify/functions/sheet-proxy.js` 与 `netlify.toml`
-4. 前端会请求 `/api/sheet-proxy`，再由 Netlify 转发到 `/.netlify/functions/sheet-proxy`
-
-## 6.1 推荐的本地测试方式（不部署 Netlify）
-
-1. 保持 `config.js` 为：
-   - `apiMode: "proxy"`
-   - `proxyEndpoint: "/api/sheet-proxy"`
-2. 在项目目录运行：
+先确保当前 shell 或项目根目录 `.env` 中已经有可用的 `DATABASE_URL`。
 
 ```bash
-node local-server.js
-```
-
-3. 打开：
-
-```text
-http://127.0.0.1:8000
+$env:DATABASE_URL="你的 Neon 连接串"
+node scripts/import-gas-csv.js --scores .\Scores.csv --words .\SharedWordBank.csv --settings .\Settings.csv --reset
 ```
 
 说明：
 
-- `local-server.js` 会同时提供静态页面和本地代理
-- 本地代理会把 `/api/sheet-proxy` 转发到 `config.js` 中的 `gasWebAppUrl`
-- 这样本地浏览器始终走同源接口，不依赖 Netlify，也不会触发直连 GAS 的浏览器跨域问题
+- `--reset` 会先清空 `scores / word_list_words / word_lists` 后再导入
+- 不带 `--reset` 时，`scores` 会追加导入，词库会按 `wordListName + version` 覆盖更新
+- `Settings.csv` 可选，但推荐一起导入，这样当前激活词库和模式也会迁过去
+
+## 5. 推荐的本地测试方式（不部署 Netlify）
+
+### Neon 版本地测试
+
+1. 安装依赖：
+
+```bash
+npm install
+```
+
+2. 在项目根目录创建 `.env`：
+
+```env
+DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require&channel_binding=require
+```
+
+3. 保持 `config.js` 为：
+   - `apiMode: "proxy"`
+   - `proxyEndpoint: "/api/sheet-proxy"`
+4. 在项目目录运行：
+
+```bash
+npx netlify dev
+```
+
+5. 打开：
+
+```text
+http://127.0.0.1:8888
+```
+
+说明：
+
+- `netlify dev` 会同时提供静态页面和 Functions
+- 这样本地浏览器始终走同源接口，也能直接验证 Neon 数据库逻辑
+- 本地 `DATABASE_URL` 推荐放在 `.env`，不要写进 `config.js`
+- `.env` 已被 `.gitignore` 忽略，不会被默认提交到仓库
 
 ## 6. file:// 本地运行说明
 
@@ -141,30 +156,29 @@ http://127.0.0.1:8000
    - “当前为离线模式，词库尚未发布”
 4. 之后把同一浏览器数据带到在线环境，点击“补传未上传成绩”
 
-## 7. 后期迁移数据库方案
+## 7. Neon 数据库结构
 
-当前代码已做存储抽象，核心接口在 `app.js`：
+当前项目已经接入 `Neon/Postgres`，建议表结构如下：
 
-- `StorageAdapter`
-- `SheetStorage`
-- `LocalStorageFallback`
-- `ScoreService`
-- `WordBankService`
-- `ApiClient`
+- `scores`
+  - 对应原 `Scores`
+- `word_lists`
+  - 一次发布对应一条词库版本记录
+- `word_list_words`
+  - 词库下的具体单词
+- `app_runtime_settings`
+  - 当前激活词库、游戏模式、最大错误次数等全局配置
 
-迁移步骤：
+初始化 SQL 已提供在：
 
-1. 新增适配器，如 `SupabaseStorage` / `PostgresStorage` / `MySQLStorage` / `FirebaseStorage`
-2. 让新适配器实现与 `StorageAdapter` 同名方法：
-   - `saveScore`
-   - `saveGameRecord`
-   - `loadSharedWordList`
-   - `publishWordList`
-   - `saveLocalWordList`
-   - `loadLocalWordList`
-   - `retryPending`
-3. 初始化时把 `const storage = new SheetStorage(...)` 换成新适配器实例
-4. `ScoreService` / `WordBankService` / 页面逻辑无需改动
+- `db/schema.sql`
+
+当前实现策略：
+
+1. 前端接口不变，仍然通过 `SheetStorage -> ApiClient -> /api/sheet-proxy`
+2. Netlify Function 内部根据 `action` 直接执行 SQL
+3. `DATABASE_URL` 存在时使用 Neon
+4. `DATABASE_URL` 不存在时自动回退到旧的 GAS 代理模式
 
 ## 8. 电脑端与手机端适配测试
 
@@ -178,14 +192,14 @@ http://127.0.0.1:8000
 
 ## 9. 常见问题与解决方案
 
-- 远程一直失败：检查 `config.js` 的 `gasWebAppUrl`、GAS 部署权限、CORS
+- 远程一直失败：优先检查 `DATABASE_URL`、Neon 表结构是否已执行、Netlify 环境变量是否生效；旧模式再检查 `gasWebAppUrl`
 - `file://` 下无法发布：属于预期，先本地暂存，在线后补传
-- 词库读不到：先确认 GAS `loadSharedWordList` 返回结构 `data.words`
+- 词库读不到：先确认数据库中已有 `word_lists` / `word_list_words` 数据；旧模式再检查 GAS `loadSharedWordList`
 - 中文乱码：确保文件为 UTF-8 编码
 
 ## 10. 增强版建议清单（下一阶段）
 
-- 公共词库版本回滚（按 `version` 筛选回退）
+- 在线词库版本回滚（按 `version` 筛选回退）
 - 练习/正式模式更细分评分策略
 - 音效开关、深浅主题切换
 - 公共排行榜（远程聚合）

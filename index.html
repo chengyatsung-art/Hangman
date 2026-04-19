@@ -13,7 +13,7 @@
     <header class="topbar">
       <div>
         <h1>课堂 Hangman</h1>
-        <p class="sub">导入只是本地草稿，发布后才会同步公共词库</p>
+        <p class="sub">导入只是本地草稿，发布后才会同步在线词库</p>
       </div>
       <div class="status-wrap">
         <span id="networkBadge" class="badge">网络检测中...</span>
@@ -65,20 +65,20 @@
 
         <div class="hangman-area">
           <svg id="hangmanSvg" viewBox="0 0 160 180" aria-label="hangman">
-            <line x1="10" y1="170" x2="100" y2="170"></line>
-            <line x1="40" y1="170" x2="40" y2="20"></line>
-            <line x1="40" y1="20" x2="110" y2="20"></line>
-            <line x1="110" y1="20" x2="110" y2="40"></line>
-            <circle class="part" data-step="1" cx="110" cy="55" r="15"></circle>
-            <line class="part" data-step="2" x1="110" y1="70" x2="110" y2="110"></line>
-            <line class="part" data-step="3" x1="110" y1="80" x2="88" y2="98"></line>
-            <line class="part" data-step="4" x1="110" y1="80" x2="132" y2="98"></line>
-            <line class="part" data-step="5" x1="110" y1="110" x2="92" y2="138"></line>
-            <line class="part" data-step="6" x1="110" y1="110" x2="128" y2="138"></line>
-            <line class="part" data-step="7" x1="104" y1="52" x2="108" y2="56"></line>
-            <line class="part" data-step="8" x1="108" y1="52" x2="104" y2="56"></line>
-            <line class="part" data-step="9" x1="112" y1="52" x2="116" y2="56"></line>
-            <line class="part" data-step="10" x1="116" y1="52" x2="112" y2="56"></line>
+            <line class="part" data-step="1" x1="10" y1="170" x2="100" y2="170"></line>
+            <line class="part" data-step="2" x1="40" y1="170" x2="40" y2="20"></line>
+            <line class="part" data-step="3" x1="40" y1="20" x2="110" y2="20"></line>
+            <line class="part" data-step="4" x1="110" y1="20" x2="110" y2="40"></line>
+            <circle class="part" data-step="5" cx="110" cy="55" r="15"></circle>
+            <line class="part" data-step="6" x1="110" y1="70" x2="110" y2="110"></line>
+            <line class="part" data-step="7" x1="110" y1="80" x2="88" y2="98"></line>
+            <line class="part" data-step="8" x1="110" y1="80" x2="132" y2="98"></line>
+            <line class="part" data-step="9" x1="110" y1="110" x2="92" y2="138"></line>
+            <line class="part" data-step="10" x1="110" y1="110" x2="128" y2="138"></line>
+            <line class="part" data-step="11" x1="104" y1="52" x2="108" y2="56"></line>
+            <line class="part" data-step="11" x1="108" y1="52" x2="104" y2="56"></line>
+            <line class="part" data-step="12" x1="112" y1="52" x2="116" y2="56"></line>
+            <line class="part" data-step="12" x1="116" y1="52" x2="112" y2="56"></line>
           </svg>
           <div class="word-box">
             <p id="wordSlots" class="slots"></p>
@@ -187,20 +187,70 @@
             <section class="teacher-panel">
               <div class="teacher-panel-head">
                 <h3>发布与分配</h3>
-                <p class="tip">发布到公共词库后，再指定学生端的版本。</p>
+                <p class="tip">发布到在线词库后，再指定学生端的版本。</p>
               </div>
               <div class="teacher-stack">
                 <div class="teacher-btn-row">
-                  <button id="publishBtn" class="primary">发布到公共词库</button>
-                  <button id="loadSharedBtn">读取公共词库预览</button>
+                  <button id="publishBtn" class="primary">发布到在线词库</button>
+                  <button id="loadSharedBtn">读取在线词库预览</button>
                 </div>
                 <p id="teacherPublishText" class="msg teacher-inline-msg"></p>
+                <div class="teacher-random-builder">
+                  <div class="teacher-random-head">
+                    <strong>随机组卷</strong>
+                    <span>从多个现有词库按配额抽词，生成可编辑的本地草稿。</span>
+                  </div>
+                  <div id="randomWordListPlan" class="teacher-random-plan"></div>
+                  <div class="teacher-btn-row teacher-btn-row-secondary">
+                    <button id="generateRandomDraftBtn" class="primary">生成随机草稿</button>
+                    <button id="clearRandomPlanBtn">清空随机计划</button>
+                  </div>
+                  <div id="randomDraftSummary" class="teacher-random-summary"></div>
+                </div>
                 <div class="teacher-assign-row">
                   <select id="wordListSelect">
-                    <option value="">Select shared word list...</option>
+                    <option value="">请选择在线词库...</option>
                   </select>
-                  <button id="refreshWordListsBtn">Refresh Word Lists</button>
-                  <button id="setActiveWordListBtn" class="primary">Assign To Students</button>
+                  <button id="refreshWordListsBtn">刷新在线词库</button>
+                  <button id="setActiveWordListBtn" class="primary">分配给学生</button>
+                  <button id="editWordListMetaBtn">编辑所选在线词库</button>
+                  <button id="deleteWordListBtn" class="danger">删除所选在线词库</button>
+                </div>
+                <div id="wordListMetaEditorCard" class="draft-editor hidden">
+                  <div class="draft-editor-head">
+                    <strong>编辑在线词库基本信息</strong>
+                    <span>仅修改老师姓名、词库名称、版本、分类和难度，不改动词条内容。</span>
+                  </div>
+                  <div class="teacher-grid teacher-grid-info draft-editor-grid">
+                    <label>
+                      老师姓名
+                      <input id="metaEditorTeacherName" type="text" placeholder="例如：张老师" />
+                    </label>
+                    <label>
+                      词库名称
+                      <input id="metaEditorWordListName" type="text" placeholder="例如：Unit 3" />
+                    </label>
+                    <label>
+                      版本
+                      <input id="metaEditorVersion" type="text" placeholder="例如：v2" />
+                    </label>
+                    <label>
+                      分类
+                      <input id="metaEditorCategory" type="text" placeholder="例如：Animals" />
+                    </label>
+                    <label class="teacher-field-sm">
+                      难度
+                      <select id="metaEditorDifficulty">
+                        <option value="easy">简单</option>
+                        <option value="medium">中等</option>
+                        <option value="hard">困难</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="teacher-btn-row">
+                    <button id="saveWordListMetaBtn" class="primary">保存基本信息</button>
+                    <button id="cancelWordListMetaBtn">取消编辑</button>
+                  </div>
                 </div>
                 <p id="activeWordListText" class="msg teacher-inline-msg"></p>
               </div>
@@ -232,7 +282,7 @@
                     <p id="activeMaxWrongGuessesText" class="msg teacher-inline-msg"></p>
                   </div>
                   <div class="teacher-rule-controls">
-                    <input id="teacherMaxWrongGuesses" type="number" min="1" max="10" step="1" value="10" />
+                    <input id="teacherMaxWrongGuesses" type="number" min="1" max="12" step="1" value="10" />
                     <button id="setMaxWrongGuessesBtn" class="primary">设置最大尝试次数</button>
                   </div>
                 </div>
@@ -256,6 +306,73 @@
                     <button id="setAutoFinishWhenExhaustedBtn" class="primary">词库用尽后自动结束：关</button>
                   </div>
                 </div>
+
+                <div class="teacher-rule-item teacher-rule-item-scoring">
+                  <div class="teacher-rule-copy">
+                    <strong>评分规则</strong>
+                    <p class="tip">按学生答题结果设置每题得分，下面会实时展示不同情况对应的分数。</p>
+                    <p id="activeScoringRulesText" class="msg teacher-inline-msg"></p>
+                  </div>
+                  <div class="teacher-scoring-card">
+                    <div class="teacher-scoring-section teacher-scoring-section-correct">
+                      <div class="teacher-scoring-head">
+                        <strong>答对时怎么算</strong>
+                        <span>先从基础分开始，再按错猜、提示和用时扣分，最后应用保底分。</span>
+                      </div>
+                      <div class="teacher-scoring-grid">
+                        <label class="teacher-scoring-field">
+                          <span>学生答对后，先得到基础分</span>
+                          <input id="teacherScoreCorrectBase" type="number" min="0" step="1" />
+                        </label>
+                        <label class="teacher-scoring-field">
+                          <span>每错猜 1 次，再扣</span>
+                          <input id="teacherScoreWrongGuessPenalty" type="number" min="0" step="1" />
+                        </label>
+                        <label class="teacher-scoring-field">
+                          <span>每使用 1 次提示，再扣</span>
+                          <input id="teacherScoreHintPenalty" type="number" min="0" step="1" />
+                        </label>
+                        <label class="teacher-scoring-field">
+                          <span>每经过多少秒，再扣 1 分</span>
+                          <input id="teacherScoreTimePenaltySeconds" type="number" min="1" step="1" />
+                        </label>
+                        <label class="teacher-scoring-field">
+                          <span>即使扣分很多，答对至少得</span>
+                          <input id="teacherScoreMinCorrect" type="number" min="0" step="1" />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="teacher-scoring-section teacher-scoring-section-wrong">
+                      <div class="teacher-scoring-head">
+                        <strong>答错时怎么算</strong>
+                        <span>答错不会走上面的扣分流程，直接使用下面的得分。</span>
+                      </div>
+                      <label class="teacher-scoring-field teacher-scoring-field-inline">
+                        <span>如果最后答错，本题直接得</span>
+                        <input id="teacherScoreWrongAnswer" type="number" min="0" step="1" />
+                      </label>
+                    </div>
+
+                    <div class="teacher-scoring-preview">
+                      <div class="teacher-scoring-head">
+                        <strong>示例预览</strong>
+                        <span>下面的分数会随着你修改规则实时变化。</span>
+                      </div>
+                      <div class="teacher-scoring-preview-list">
+                        <div id="scoringExampleFastText" class="teacher-scoring-preview-item"></div>
+                        <div id="scoringExampleChallengeText" class="teacher-scoring-preview-item"></div>
+                        <div id="scoringExampleWrongText" class="teacher-scoring-preview-item"></div>
+                      </div>
+                      <p id="scoringRuleExplainText" class="teacher-scoring-explain"></p>
+                    </div>
+
+                    <div class="teacher-rule-controls teacher-rule-controls-grid">
+                      <button id="saveScoringRulesBtn" class="primary">保存评分规则</button>
+                      <button id="resetScoringRulesBtn">恢复默认规则</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           </div>
@@ -265,6 +382,49 @@
       <div class="card">
         <h3>本地草稿词库</h3>
         <p id="draftCountText"></p>
+        <div class="teacher-btn-row draft-action-row">
+          <button id="addDraftWordBtn">手动新增词条</button>
+        </div>
+        <div id="draftEditorCard" class="draft-editor hidden">
+          <div class="draft-editor-head">
+            <strong id="draftEditorTitle">新增草稿词条</strong>
+            <span>可用于补词、修正随机组卷结果或手动维护词库。</span>
+          </div>
+          <div class="teacher-grid teacher-grid-info draft-editor-grid">
+            <label>
+              来源词库名
+              <input id="draftEditorWordListName" type="text" placeholder="例如：Unit 3 / 手动补充" />
+            </label>
+            <label>
+              来源版本
+              <input id="draftEditorVersion" type="text" placeholder="例如：v1（可留空）" />
+            </label>
+            <label>
+              单词
+              <input id="draftEditorWord" type="text" placeholder="例如：banana" />
+            </label>
+            <label>
+              释义
+              <input id="draftEditorMeaning" type="text" placeholder="例如：香蕉" />
+            </label>
+            <label>
+              分类
+              <input id="draftEditorCategory" type="text" placeholder="例如：Food" />
+            </label>
+            <label class="teacher-field-sm">
+              难度
+              <select id="draftEditorDifficulty">
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+              </select>
+            </label>
+          </div>
+          <div class="teacher-btn-row">
+            <button id="saveDraftWordBtn" class="primary">保存词条</button>
+            <button id="cancelDraftEditBtn">取消编辑</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -283,7 +443,7 @@
       </div>
 
       <div class="card">
-        <h3>公共词库预览</h3>
+        <h3>在线词库预览</h3>
         <p id="sharedCountText"></p>
         <div class="table-wrap">
           <table>

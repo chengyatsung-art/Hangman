@@ -488,6 +488,147 @@ button.ghost {
   margin-top: 0;
 }
 
+.teacher-random-builder {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.teacher-random-head {
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-random-head strong {
+  font-size: 14px;
+}
+
+.teacher-random-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.teacher-random-plan {
+  display: grid;
+  gap: 8px;
+}
+
+.teacher-random-plan-empty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  background: #fff;
+}
+
+.teacher-random-plan-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.teacher-random-plan-meta {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.teacher-random-plan-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.teacher-random-plan-check input[type="checkbox"] {
+  flex: 0 0 auto;
+}
+
+.teacher-random-plan-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-random-plan-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.teacher-random-plan-controls input[type="number"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.teacher-random-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.teacher-random-summary:empty {
+  display: none;
+}
+
+.teacher-random-summary-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.teacher-random-summary-item.warn {
+  border-color: #f0d08d;
+  background: #fff9eb;
+}
+
+.draft-action-row {
+  margin-top: 10px;
+}
+
+.draft-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.draft-editor-head {
+  display: grid;
+  gap: 4px;
+}
+
+.draft-editor-head strong {
+  font-size: 14px;
+}
+
+.draft-editor-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.draft-editor-grid {
+  margin-top: 0;
+}
+
+#wordListMetaEditorCard {
+  margin-top: 8px;
+}
+
 .teacher-rule-list {
   display: grid;
   gap: 12px;
@@ -529,6 +670,105 @@ button.ghost {
 .teacher-rule-controls input,
 .teacher-rule-controls select {
   min-width: 120px;
+}
+
+.teacher-rule-item-scoring {
+  align-items: flex-start;
+}
+
+.teacher-scoring-card {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 560px);
+}
+
+.teacher-scoring-section,
+.teacher-scoring-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.teacher-scoring-section-correct {
+  background: linear-gradient(180deg, #fbfcfe 0%, #f5fbf6 100%);
+}
+
+.teacher-scoring-section-wrong {
+  background: linear-gradient(180deg, #fbfcfe 0%, #fff7f5 100%);
+}
+
+.teacher-scoring-head {
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-scoring-head strong {
+  font-size: 14px;
+}
+
+.teacher-scoring-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.teacher-scoring-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.teacher-scoring-field {
+  display: grid;
+  gap: 6px;
+}
+
+.teacher-scoring-field span {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.teacher-scoring-field-inline {
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: center;
+}
+
+.teacher-scoring-field-inline input {
+  width: 100%;
+}
+
+.teacher-rule-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.teacher-rule-controls-grid input,
+.teacher-rule-controls-grid button {
+  width: 100%;
+}
+
+.teacher-scoring-preview-list {
+  display: grid;
+  gap: 8px;
+}
+
+.teacher-scoring-preview-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.teacher-scoring-explain {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .stats {
@@ -604,7 +844,8 @@ th {
   .teacher-file-row,
   .teacher-assign-row,
   .teacher-btn-row,
-  .teacher-rule-controls {
+  .teacher-rule-controls,
+  .teacher-random-plan-item {
     display: grid;
     grid-template-columns: 1fr;
   }
@@ -616,9 +857,24 @@ th {
   .teacher-assign-row button,
   .teacher-rule-controls input,
   .teacher-rule-controls select,
-  .teacher-rule-controls button {
+  .teacher-rule-controls button,
+  .teacher-random-plan-controls input[type="number"] {
     width: 100%;
     min-width: 0;
+  }
+
+  .teacher-rule-controls-grid {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .teacher-scoring-grid,
+  .teacher-scoring-field-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-random-plan-check {
+    align-items: flex-start;
   }
 
   #gameCard {

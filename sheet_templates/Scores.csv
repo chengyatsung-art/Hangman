@@ -1,2 +1,0 @@
-timestamp,studentName,studentId,word,category,difficulty,result,wrongGuesses,hintsUsed,durationSeconds,score,deviceType,mode,uploadStatus
-2026-03-24T10:00:00.000Z,测试学生,stu_001,apple,Food,easy,correct,1,0,18,81,desktop,practice,uploaded
