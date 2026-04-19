@@ -14,9 +14,7 @@
   };
 
   const CONFIG = Object.assign({
-    gasWebAppUrl: "",
-    apiMode: "direct",
-    proxyEndpoint: "/.netlify/functions/sheet-proxy",
+    proxyEndpoint: "/api/sheet-proxy",
     maxWrongGuesses: 10,
     teacherPassword: "cys88888888",
     allowWordRepeat: false,
@@ -2225,16 +2223,13 @@
   }
 
   ApiClient.prototype.getEndpoint = function () {
-    return this.config.apiMode === "proxy" ? this.config.proxyEndpoint : this.config.gasWebAppUrl;
+    return this.config.proxyEndpoint;
   };
 
   ApiClient.prototype.post = async function (action, payload) {
     const endpoint = this.getEndpoint();
     if (!endpoint) throw new Error("未配置远程接口 URL");
     const requestBody = { action, payload };
-    if (this.config.apiMode === "proxy" && this.config.gasWebAppUrl) {
-      requestBody.gasWebAppUrl = this.config.gasWebAppUrl;
-    }
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

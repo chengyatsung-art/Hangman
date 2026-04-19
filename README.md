@@ -13,7 +13,7 @@
 ├─ netlify.toml                   # Netlify 配置
 ├─ netlify/
 │  └─ functions/
-│     └─ sheet-proxy.js           # Netlify Function（优先 Neon）
+│     └─ sheet-proxy.js           # Netlify Function（纯 Neon）
 ├─ scripts/
 │  └─ import-gas-csv.js           # Google Sheets CSV -> Neon 导入脚本
 ├─ package.json
@@ -39,7 +39,7 @@
 - 网络恢复后可手动补传待上传数据
 - 本地成绩可导出 CSV
 
-## 3. Google Sheets 字段设计
+## 3. Google Sheets 导出字段参考
 
 ### A. 成绩表（sheet 名：`Scores`）
 
@@ -60,7 +60,7 @@
 13. `mode`
 14. `uploadStatus`
 
-### B. 公共词库表（sheet 名：`SharedWordBank`）
+### B. 在线词库表（sheet 名：`SharedWordBank`）
 
 字段顺序：
 
@@ -77,22 +77,20 @@
 
 ## 4. Netlify 部署说明
 
-### 模式 0：Netlify Functions + Neon（当前推荐）
+### Netlify Functions + Neon
 
 1. 在 `Neon` 新建一个 Postgres 数据库
 2. 打开 Neon SQL Editor，执行 `db/schema.sql`
 3. 在 Netlify 环境变量中配置：
    - `DATABASE_URL=你的 Neon 连接串`
 4. 部署到 Netlify 后，前端仍然请求 `/api/sheet-proxy`
-5. `netlify/functions/sheet-proxy.js` 会优先走 `DATABASE_URL`
-6. 如果 `DATABASE_URL` 未配置，函数才会回退到旧的 GAS 代理模式
-7. 如需迁移旧数据，先从 Google Sheets 导出 `Scores`、`SharedWordBank`、`Settings` 为 CSV，再运行导入脚本
+5. `netlify/functions/sheet-proxy.js` 直接使用 `DATABASE_URL`
+6. 如需迁移旧数据，先从 Google Sheets 导出 `Scores`、`SharedWordBank`、`Settings` 为 CSV，再运行导入脚本
 
 说明：
 
 - 前端 `action + payload` 协议保持不变
 - `config.js` 中现有 `proxyEndpoint` 可继续使用
-- `gasWebAppUrl` 现在只作为旧模式兜底，不再是主方案
 
 ### Google Sheets CSV 导入 Neon
 
@@ -125,9 +123,8 @@ npm install
 DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require&channel_binding=require
 ```
 
-3. 保持 `config.js` 为：
-   - `apiMode: "proxy"`
-   - `proxyEndpoint: "/api/sheet-proxy"`
+3. 保持 `config.js` 的 `proxyEndpoint` 为：
+   - `"/api/sheet-proxy"`
 4. 在项目目录运行：
 
 ```bash
@@ -177,8 +174,8 @@ http://127.0.0.1:8888
 
 1. 前端接口不变，仍然通过 `SheetStorage -> ApiClient -> /api/sheet-proxy`
 2. Netlify Function 内部根据 `action` 直接执行 SQL
-3. `DATABASE_URL` 存在时使用 Neon
-4. `DATABASE_URL` 不存在时自动回退到旧的 GAS 代理模式
+3. 项目现在是纯 `Neon/Postgres` 版本
+4. `DATABASE_URL` 未配置时，后端会直接报错，不再回退到 Google Sheets / GAS
 
 ## 8. 电脑端与手机端适配测试
 
@@ -192,9 +189,9 @@ http://127.0.0.1:8888
 
 ## 9. 常见问题与解决方案
 
-- 远程一直失败：优先检查 `DATABASE_URL`、Neon 表结构是否已执行、Netlify 环境变量是否生效；旧模式再检查 `gasWebAppUrl`
+ - 远程一直失败：优先检查 `DATABASE_URL`、Neon 表结构是否已执行、Netlify 环境变量是否生效
 - `file://` 下无法发布：属于预期，先本地暂存，在线后补传
-- 词库读不到：先确认数据库中已有 `word_lists` / `word_list_words` 数据；旧模式再检查 GAS `loadSharedWordList`
+- 词库读不到：先确认数据库中已有 `word_lists` / `word_list_words` 数据
 - 中文乱码：确保文件为 UTF-8 编码
 
 ## 10. 增强版建议清单（下一阶段）

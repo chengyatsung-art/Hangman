@@ -22,7 +22,10 @@ exports.handler = async function (event) {
   }
 
   if (!process.env.DATABASE_URL) {
-    return forwardToGas(requestBody, parsedBody);
+    return jsonResponse(500, {
+      ok: false,
+      message: "Missing DATABASE_URL. This project is Neon-only and no longer supports GAS fallback."
+    });
   }
 
   try {
@@ -33,32 +36,6 @@ exports.handler = async function (event) {
     return jsonResponse(500, { ok: false, message: error.message || "Database action failed" });
   }
 };
-
-async function forwardToGas(requestBody, parsedBody) {
-  const endpoint = process.env.GAS_WEB_APP_URL || parsedBody.gasWebAppUrl;
-  if (!endpoint) {
-    return jsonResponse(500, {
-      ok: false,
-      message: "Missing DATABASE_URL, and no GAS_WEB_APP_URL / gasWebAppUrl fallback is configured"
-    });
-  }
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody
-    });
-    const text = await response.text();
-    return {
-      statusCode: response.status,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: text
-    };
-  } catch (error) {
-    return jsonResponse(502, { ok: false, message: "Proxy request failed", detail: error.message });
-  }
-}
 
 async function handleDatabaseAction(action, payload) {
   if (!action) {
